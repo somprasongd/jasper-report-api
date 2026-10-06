@@ -27,6 +27,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -45,6 +46,10 @@ class HttpSourceTest {
     static volatile long delayMillis = 0;
     static final AtomicInteger INFLIGHT = new AtomicInteger();
     static final AtomicInteger MAX_INFLIGHT = new AtomicInteger();
+    /** Bundle downloads (everything but the logo): how many, and when the first started and the last finished. */
+    static final AtomicInteger DOWNLOADS = new AtomicInteger();
+    static final AtomicLong FIRST_START = new AtomicLong(Long.MAX_VALUE);
+    static final AtomicLong LAST_END = new AtomicLong(0);
     static final HttpServer SERVER = start();
     static final String BASE = "http://127.0.0.1:" + SERVER.getAddress().getPort();
 
@@ -54,8 +59,14 @@ class HttpSourceTest {
             HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
             server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
             server.createContext("/", exchange -> {
+                String path = exchange.getRequestURI().getPath();
+                boolean download = !path.endsWith(".png");
                 int now = INFLIGHT.incrementAndGet();
                 MAX_INFLIGHT.accumulateAndGet(now, Math::max);
+                if (download) {
+                    DOWNLOADS.incrementAndGet();
+                    FIRST_START.accumulateAndGet(System.nanoTime(), Math::min);
+                }
                 try {
                     if (delayMillis > 0) {
                         Thread.sleep(delayMillis);
@@ -64,8 +75,10 @@ class HttpSourceTest {
                     Thread.currentThread().interrupt();
                 } finally {
                     INFLIGHT.decrementAndGet();
+                    if (download) {
+                        LAST_END.accumulateAndGet(System.nanoTime(), Math::max);
+                    }
                 }
-                String path = exchange.getRequestURI().getPath();
                 // the logo is fetched by JasperReports at render time, not by the bundle download: keep it up during the "outage"
                 if (forcedStatus != 0 && !path.endsWith(".png")) {
                     exchange.sendResponseHeaders(forcedStatus, -1);
@@ -223,14 +236,19 @@ class HttpSourceTest {
     void theFilesOfOneReportAreDownloadedInParallel() throws Exception {
         delayMillis = 150;
         MAX_INFLIGHT.set(0);
+        DOWNLOADS.set(0);
+        FIRST_START.set(Long.MAX_VALUE);
+        LAST_END.set(0);
         try {
-            long start = System.nanoTime();
-            // a language no other test used: a cold load of main + sub-report + 6 possible message files
+            // a language no other test used: a cold load of main + sub-report + the possible message files
             MvcResult result = render(body("ko", true));
-            long millis = (System.nanoTime() - start) / 1_000_000;
             assertThat(text(result)).contains("ใบรับรองแพทย์ทดสอบ");
             assertThat(MAX_INFLIGHT.get()).as("downloads in flight at once").isGreaterThanOrEqualTo(4);
-            assertThat(millis).as("8 downloads of 150 ms would take 1200 ms one after the other").isLessThan(1100);
+            // only the download phase is timed (as the server saw it), not compiling or rendering, which depend on the machine's load
+            long downloadMillis = (LAST_END.get() - FIRST_START.get()) / 1_000_000;
+            long sequentialMillis = DOWNLOADS.get() * delayMillis;
+            assertThat(downloadMillis).as("%d downloads of %d ms would take %d ms one after the other", DOWNLOADS.get(), delayMillis, sequentialMillis)
+                    .isLessThan(sequentialMillis * 3 / 4);
         } finally {
             delayMillis = 0;
         }
