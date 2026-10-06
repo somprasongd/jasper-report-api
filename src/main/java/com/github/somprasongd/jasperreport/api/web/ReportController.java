@@ -35,10 +35,10 @@ public class ReportController {
     public ResponseEntity<byte[]> render(@Valid @RequestBody RenderRequest request,
                                          @RequestHeader(value = "X-Tenant-Id", required = false) String tenant) {
         RenderResult result = renderService.render(request, tenant);
+        ContentDisposition.Builder disposition = result.inline() ? ContentDisposition.inline() : ContentDisposition.attachment();
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(result.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename(result.fileName(), StandardCharsets.UTF_8).build().toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.filename(result.fileName(), StandardCharsets.UTF_8).build().toString())
                 .header("X-Report-Version", result.version())
                 .header(HttpHeaders.CONTENT_LANGUAGE, result.locale())
                 .body(result.content());

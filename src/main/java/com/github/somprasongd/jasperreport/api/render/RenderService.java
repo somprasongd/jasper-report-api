@@ -20,9 +20,14 @@ import net.sf.jasperreports.engine.JasperPrint;
 import net.sf.jasperreports.engine.JasperReport;
 import net.sf.jasperreports.engine.util.JRResourcesUtil;
 import net.sf.jasperreports.engine.util.LocalJasperReportsContext;
-import net.sf.jasperreports.pdf.JRPdfExporter;
+import net.sf.jasperreports.engine.export.JRCsvExporter;
+import net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter;
+import net.sf.jasperreports.export.SimpleCsvExporterConfiguration;
 import net.sf.jasperreports.export.SimpleExporterInput;
 import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
+import net.sf.jasperreports.export.SimpleWriterExporterOutput;
+import net.sf.jasperreports.export.SimpleXlsxReportConfiguration;
+import net.sf.jasperreports.pdf.JRPdfExporter;
 import net.sf.jasperreports.governors.MaxPagesGovernorException;
 import net.sf.jasperreports.json.query.JsonQueryExecuterFactory;
 import net.sf.jasperreports.governors.TimeoutGovernorException;
@@ -53,12 +58,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RenderService {
 
     private static final Logger log = LoggerFactory.getLogger(RenderService.class);
-    private static final String PDF = "application/pdf";
+    private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
     private final DataSourceRegistry datasources;
     private final DatasourceSelector selector;
     private final LocaleSelector localeSelector;
     private final BundleClassLoaders classLoaders;
+    private final RenderVirtualizers virtualizers;
     private final SourceResolver sources;
     private final ReportCompiler compiler;
     private final ParameterBinder binder;
@@ -67,12 +73,13 @@ public class RenderService {
     private final Semaphore permits;
     private final AtomicInteger inflight = new AtomicInteger();
 
-    public RenderService(DataSourceRegistry datasources, DatasourceSelector selector, LocaleSelector localeSelector, BundleClassLoaders classLoaders, SourceResolver sources,
-                         ReportCompiler compiler, ParameterBinder binder, ReportProperties properties, MeterRegistry meters) {
+    public RenderService(DataSourceRegistry datasources, DatasourceSelector selector, LocaleSelector localeSelector, BundleClassLoaders classLoaders, RenderVirtualizers virtualizers,
+                         SourceResolver sources, ReportCompiler compiler, ParameterBinder binder, ReportProperties properties, MeterRegistry meters) {
         this.datasources = datasources;
         this.selector = selector;
         this.localeSelector = localeSelector;
         this.classLoaders = classLoaders;
+        this.virtualizers = virtualizers;
         this.sources = sources;
         this.compiler = compiler;
         this.binder = binder;
@@ -83,17 +90,14 @@ public class RenderService {
     }
 
     public RenderResult render(RenderRequest request, String tenantHeader) {
-        String format = request.format() == null || request.format().isBlank() ? "pdf" : request.format().toLowerCase(Locale.ROOT);
-        if (!format.equals("pdf")) {
-            throw ApiException.badRequest("FORMAT_UNSUPPORTED", "format '" + request.format() + "' is not supported (only pdf)");
-        }
+        OutputFormat format = OutputFormat.parse(request.format());
         String tenant = datasources.requestedTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
         String reportName = "unknown";
         String datasourceName = "unknown";
         String outcome = "error";
         long start = System.nanoTime();
         acquire();
-        try {
+        try (RenderVirtualizers.Swap swap = virtualizers.open()) {
             ResolvedBundle bundle = sources.resolve(request.mainReport().url(), subReportSources(request.subReports()),
                     localeSelector.hints(request.locale()));
             reportName = stripExtension(bundle.mainFile());
@@ -105,10 +109,16 @@ public class RenderService {
             Map<String, Object> params = new HashMap<>(binder.bind(report, request.parameters()));
             addSystemParameters(params, report, bundle, request, locale);
 
+            if (swap.virtualizer() != null) {
+                params.put(JRParameter.REPORT_VIRTUALIZER, swap.virtualizer());
+            }
+
             JasperPrint print = fill(report, params, plan, request, tenant, bundle);
-            byte[] pdf = exportPdf(print);
+            swap.readOnly();
+            byte[] content = export(print, format);
             outcome = "success";
-            return new RenderResult(pdf, PDF, fileName(request, reportName), bundle.version(), locale.toLanguageTag());
+            return new RenderResult(content, format.contentType(), fileName(request, reportName, format), bundle.version(),
+                    locale.toLanguageTag(), format.inline());
         } catch (ApiException e) {
             outcome = e.code();
             throw e;
@@ -117,7 +127,7 @@ public class RenderService {
             permits.release();
             Timer.builder("report.render")
                     .tag("tenant", tenant).tag("report", reportName).tag("datasource", datasourceName)
-                    .tag("format", format).tag("outcome", outcome)
+                    .tag("format", format.extension()).tag("outcome", outcome)
                     .register(meters).record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         }
     }
@@ -259,21 +269,53 @@ public class RenderService {
         return e instanceof SQLTimeoutException || "57014".equals(e.getSQLState());
     }
 
-    private byte[] exportPdf(JasperPrint print) {
+    private byte[] export(JasperPrint print, OutputFormat format) {
         ByteArrayOutputStream out = new ByteArrayOutputStream(64 * 1024);
         try {
-            JRPdfExporter exporter = new JRPdfExporter();
-            exporter.setExporterInput(new SimpleExporterInput(print));
-            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(out));
-            exporter.exportReport();
+            switch (format) {
+                case PDF -> {
+                    JRPdfExporter exporter = new JRPdfExporter();
+                    exporter.setExporterInput(new SimpleExporterInput(print));
+                    exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(out));
+                    exporter.exportReport();
+                }
+                case XLSX -> {
+                    JRXlsxExporter exporter = new JRXlsxExporter();
+                    exporter.setExporterInput(new SimpleExporterInput(print));
+                    exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(out));
+                    SimpleXlsxReportConfiguration configuration = new SimpleXlsxReportConfiguration();
+                    // one continuous sheet of real cells: what people want from a spreadsheet, not a copy of the page layout
+                    configuration.setOnePagePerSheet(false);
+                    configuration.setDetectCellType(true);
+                    configuration.setWhitePageBackground(false);
+                    configuration.setRemoveEmptySpaceBetweenRows(true);
+                    configuration.setRemoveEmptySpaceBetweenColumns(true);
+                    exporter.setConfiguration(configuration);
+                    exporter.exportReport();
+                }
+                case CSV -> {
+                    if (properties.export().csvBom()) {
+                        out.writeBytes(UTF8_BOM);
+                    }
+                    JRCsvExporter exporter = new JRCsvExporter();
+                    exporter.setExporterInput(new SimpleExporterInput(print));
+                    exporter.setExporterOutput(new SimpleWriterExporterOutput(out, StandardCharsets.UTF_8.name()));
+                    SimpleCsvExporterConfiguration configuration = new SimpleCsvExporterConfiguration();
+                    configuration.setFieldDelimiter(",");
+                    configuration.setRecordDelimiter("\r\n");
+                    exporter.setConfiguration(configuration);
+                    exporter.exportReport();
+                }
+            }
         } catch (JRException | RuntimeException e) {
-            log.error("PDF export failed", e);
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "PDF export failed: " + rootMessage(e), e);
+            log.error("{} export failed", format.extension(), e);
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                    format.extension().toUpperCase(Locale.ROOT) + " export failed: " + rootMessage(e), e);
         }
         return out.toByteArray();
     }
 
-    private static String fileName(RenderRequest request, String reportName) {
+    private static String fileName(RenderRequest request, String reportName, OutputFormat format) {
         String name = request.fileName() != null && !request.fileName().isBlank() ? request.fileName()
                 : request.mainReport().name() != null && !request.mainReport().name().isBlank() ? request.mainReport().name()
                 : reportName;
@@ -281,7 +323,8 @@ public class RenderService {
         if (name.isEmpty()) {
             name = "report";
         }
-        return name.toLowerCase(Locale.ROOT).endsWith(".pdf") ? name : name + ".pdf";
+        String suffix = "." + format.extension();
+        return name.toLowerCase(Locale.ROOT).endsWith(suffix) ? name : name + suffix;
     }
 
     private static String stripExtension(String file) {

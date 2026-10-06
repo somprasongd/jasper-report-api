@@ -47,6 +47,8 @@ Package root `com.github.somprasongd.jasperreport.api`. A render request flows t
 5. `datasource/` — `DataSourceRegistry` lazily builds named HikariCP pools per tenant from `tenants.*` config. `params/` — `ParameterBinder` converts request parameter values to the types declared in the JRXML. `inspect/` — `ReportInspector` backs `POST /api/v1/reports/validate`.
 6. `config/` — `ReportProperties` (`report.*`), readiness indicators; `application.yml` plus `config/application.example.yml`.
 
+Output formats are `pdf`, `xlsx` and `csv` (`OutputFormat`); `RenderVirtualizers` gives each render a swap-file virtualizer that `RenderService` always closes. `jrxml/LegacyJrxmlConverter` (behind `POST /api/v1/reports/convert`) rewrites JR 6.x JRXML into the JR 7 syntax with DOM + JDK XML only; its `RelocatedClasses` list is derived from diffing the 6.21.5 and 7.0.8 jars. Never feed its output to JR 6. The API contract is `src/main/resources/openapi/openapi.yaml`, written by hand and served at `/api/v1/openapi.yaml`: when you add or change an endpoint, a request field, a format or an error code (`ApiException`), update it in the same change or `OpenApiContractTest` fails.
+
 Two API paths exist: `/api/v1/reports/render` and the legacy-compatible `/api/v1/jasper/generate` (request shape compatible with `jasperreports-pdf`).
 
 ## Things that are easy to get wrong

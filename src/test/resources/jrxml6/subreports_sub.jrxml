@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic JR 6 sub-report used by subreports_main: it runs on the connection of its parent or on a data source. -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="subreports_sub" language="java" pageWidth="555" pageHeight="842" columnWidth="555" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" uuid="22222222-2222-4222-8222-000000000002">
+	<parameter name="title" class="java.lang.String">
+		<defaultValueExpression><![CDATA["Default title"]]></defaultValueExpression>
+	</parameter>
+	<parameter name="limit" class="java.lang.Integer">
+		<defaultValueExpression><![CDATA[Integer.valueOf(99)]]></defaultValueExpression>
+	</parameter>
+	<queryString>
+		<![CDATA[select qty from items order by item]]>
+	</queryString>
+	<field name="qty" class="java.lang.Integer"/>
+	<variable name="row_count" class="java.lang.Integer" calculation="Count">
+		<variableExpression><![CDATA[$F{qty}]]></variableExpression>
+	</variable>
+	<title>
+		<band height="20">
+			<textField>
+				<reportElement x="0" y="0" width="300" height="20"/>
+				<textElement>
+					<font fontName="DejaVu Sans"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$P{title}]]></textFieldExpression>
+			</textField>
+		</band>
+	</title>
+	<detail>
+		<band height="20">
+			<printWhenExpression><![CDATA[Boolean.valueOf($V{REPORT_COUNT}.intValue() <= $P{limit}.intValue())]]></printWhenExpression>
+			<textField>
+				<reportElement x="0" y="0" width="300" height="20"/>
+				<textElement>
+					<font fontName="DejaVu Sans"/>
+				</textElement>
+				<textFieldExpression><![CDATA["row " + $F{qty}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+</jasperReport>

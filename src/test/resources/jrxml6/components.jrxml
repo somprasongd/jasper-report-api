@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic JR 6 report with components (table, list, barcode4j) and a crosstab, all on a sub dataset. -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="components" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="33333333-3333-4333-8333-000000000001">
+	<style name="Cell" fontName="DejaVu Sans" fontSize="9">
+		<box>
+			<pen lineWidth="0.5" lineColor="#000000"/>
+		</box>
+	</style>
+	<style name="Head" style="Cell" mode="Opaque" backcolor="#DDDDDD" isBold="true"/>
+	<subDataset name="Items" whenResourceMissingType="Empty" uuid="33333333-3333-4333-8333-000000000002">
+		<property name="ds.note" value="items"/>
+		<parameter name="minQty" class="java.lang.Integer">
+			<defaultValueExpression><![CDATA[Integer.valueOf(0)]]></defaultValueExpression>
+		</parameter>
+		<queryString>
+			<![CDATA[select grp, item, qty from items where qty >= $P{minQty} order by grp, item]]>
+		</queryString>
+		<field name="grp" class="java.lang.String"/>
+		<field name="item" class="java.lang.String"/>
+		<field name="qty" class="java.lang.Integer"/>
+		<group name="by_grp">
+			<groupExpression><![CDATA[$F{grp}]]></groupExpression>
+		</group>
+	</subDataset>
+	<title>
+		<band height="430">
+			<componentElement>
+				<reportElement key="items_table" x="0" y="0" width="555" height="100" uuid="33333333-3333-4333-8333-000000000010">
+					<property name="net.sf.jasperreports.export.headertoolbar.table.name" value="Items"/>
+				</reportElement>
+				<jr:table xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" whenNoDataType="NoDataCell" horizontalPosition="Left">
+					<datasetRun subDataset="Items" uuid="33333333-3333-4333-8333-000000000011">
+						<datasetParameter name="minQty">
+							<datasetParameterExpression><![CDATA[Integer.valueOf(4)]]></datasetParameterExpression>
+						</datasetParameter>
+						<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+					</datasetRun>
+					<jr:column width="150" uuid="33333333-3333-4333-8333-000000000012">
+						<jr:tableHeader style="Head" height="24" rowSpan="1">
+							<staticText>
+								<reportElement x="0" y="0" width="150" height="24"/>
+								<text><![CDATA[Item]]></text>
+							</staticText>
+						</jr:tableHeader>
+						<jr:groupHeader groupName="by_grp">
+							<jr:cell style="Head" height="20">
+								<textField>
+									<reportElement x="0" y="0" width="150" height="20"/>
+									<textFieldExpression><![CDATA["Group " + $F{grp}]]></textFieldExpression>
+								</textField>
+							</jr:cell>
+						</jr:groupHeader>
+						<jr:groupFooter groupName="by_grp">
+							<jr:cell height="0"/>
+						</jr:groupFooter>
+						<jr:detailCell style="Cell" height="22">
+							<textField>
+								<reportElement x="0" y="0" width="150" height="22"/>
+								<textFieldExpression><![CDATA[$F{item}]]></textFieldExpression>
+							</textField>
+						</jr:detailCell>
+					</jr:column>
+					<jr:columnGroup width="200" uuid="33333333-3333-4333-8333-000000000013">
+						<jr:tableHeader style="Head" height="24">
+							<staticText>
+								<reportElement x="0" y="0" width="200" height="24"/>
+								<text><![CDATA[Numbers]]></text>
+							</staticText>
+						</jr:tableHeader>
+						<jr:column width="100">
+							<jr:columnHeader style="Head" height="20">
+								<staticText>
+									<reportElement x="0" y="0" width="100" height="20"/>
+									<text><![CDATA[Qty]]></text>
+								</staticText>
+							</jr:columnHeader>
+							<jr:detailCell style="Cell" height="22">
+								<textField>
+									<reportElement x="0" y="0" width="100" height="22"/>
+									<textFieldExpression><![CDATA[$F{qty}]]></textFieldExpression>
+								</textField>
+							</jr:detailCell>
+						</jr:column>
+						<jr:column width="100">
+							<jr:columnHeader style="Head" height="20">
+								<staticText>
+									<reportElement x="0" y="0" width="100" height="20"/>
+									<text><![CDATA[Double]]></text>
+								</staticText>
+							</jr:columnHeader>
+							<jr:columnFooter height="18">
+								<staticText>
+									<reportElement x="0" y="0" width="100" height="18"/>
+									<text><![CDATA[end]]></text>
+								</staticText>
+							</jr:columnFooter>
+							<jr:detailCell style="Cell" height="22">
+								<textField>
+									<reportElement x="0" y="0" width="100" height="22"/>
+									<textFieldExpression><![CDATA[Integer.valueOf($F{qty}.intValue() * 2)]]></textFieldExpression>
+								</textField>
+							</jr:detailCell>
+						</jr:column>
+					</jr:columnGroup>
+					<jr:tableHeader splitType="Prevent"/>
+					<jr:detail splitType="Stretch"/>
+					<jr:noData style="Cell" height="22">
+						<staticText>
+							<reportElement x="0" y="0" width="350" height="22"/>
+							<text><![CDATA[No rows]]></text>
+						</staticText>
+					</jr:noData>
+				</jr:table>
+			</componentElement>
+			<componentElement>
+				<reportElement key="items_list" x="0" y="110" width="555" height="60" uuid="33333333-3333-4333-8333-000000000020"/>
+				<jr:list xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" printOrder="Horizontal" ignoreWidth="true">
+					<datasetRun subDataset="Items">
+						<datasetParameter name="minQty">
+							<datasetParameterExpression><![CDATA[Integer.valueOf(4)]]></datasetParameterExpression>
+						</datasetParameter>
+						<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+					</datasetRun>
+					<jr:listContents height="30" width="185">
+						<textField>
+							<reportElement x="0" y="0" width="180" height="30"/>
+							<textFieldExpression><![CDATA["list " + $F{item} + ":" + $F{qty}]]></textFieldExpression>
+						</textField>
+					</jr:listContents>
+				</jr:list>
+			</componentElement>
+			<componentElement>
+				<reportElement key="code128" x="0" y="180" width="200" height="50"/>
+				<jr:Code128 xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" moduleWidth="1.5" textPosition="bottom" quietZone="2.0" verticalQuietZone="1.0" orientation="up" evaluationTime="Report">
+					<jr:codeExpression><![CDATA["ABC-123"]]></jr:codeExpression>
+				</jr:Code128>
+			</componentElement>
+			<componentElement>
+				<reportElement key="qr" x="210" y="180" width="60" height="60"/>
+				<jr:QRCode xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" margin="2" errorCorrectionLevel="M">
+					<jr:codeExpression><![CDATA["https://example.org/qr"]]></jr:codeExpression>
+				</jr:QRCode>
+			</componentElement>
+			<componentElement>
+				<reportElement key="code39" x="280" y="180" width="60" height="100"/>
+				<jr:Code39 xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" orientation="90" checksumMode="ignore" displayChecksum="false" displayStartStop="true" extendedCharSetEnabled="false" intercharGapWidth="1.0" wideFactor="2.5" textPosition="none">
+					<jr:codeExpression><![CDATA["39-X"]]></jr:codeExpression>
+				</jr:Code39>
+			</componentElement>
+			<crosstab>
+				<reportElement key="xt" x="0" y="290" width="555" height="130" uuid="33333333-3333-4333-8333-000000000030"/>
+				<crosstabDataset isDataPreSorted="false">
+					<dataset resetType="Report">
+						<datasetRun subDataset="Items">
+							<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+						</datasetRun>
+					</dataset>
+				</crosstabDataset>
+				<crosstabHeaderCell>
+					<cellContents backcolor="#F0F0F0" mode="Opaque">
+						<staticText>
+							<reportElement style="Cell" x="0" y="0" width="70" height="20"/>
+							<text><![CDATA[Item/Grp]]></text>
+						</staticText>
+					</cellContents>
+				</crosstabHeaderCell>
+				<rowGroup name="item" width="70" totalPosition="End" headerPosition="Middle">
+					<bucket order="Ascending" class="java.lang.String">
+						<bucketExpression class="java.lang.String"><![CDATA[$F{item}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents backcolor="#F0F0FF" mode="Opaque" style="Cell">
+							<textField>
+								<reportElement x="0" y="0" width="70" height="20"/>
+								<textFieldExpression><![CDATA[$V{item}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents backcolor="#BFBFFF" mode="Opaque">
+							<staticText>
+								<reportElement x="0" y="0" width="70" height="20"/>
+								<text><![CDATA[Total rows]]></text>
+							</staticText>
+						</cellContents>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<columnGroup name="grp" height="20" totalPosition="End" headerPosition="Center">
+					<bucket class="java.lang.String">
+						<bucketExpression class="java.lang.String"><![CDATA[$F{grp}]]></bucketExpression>
+					</bucket>
+					<crosstabColumnHeader>
+						<cellContents backcolor="#F0F0FF" mode="Opaque">
+							<textField>
+								<reportElement x="0" y="0" width="60" height="20"/>
+								<textFieldExpression><![CDATA["G " + $V{grp}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabColumnHeader>
+					<crosstabTotalColumnHeader>
+						<cellContents backcolor="#BFBFFF" mode="Opaque">
+							<staticText>
+								<reportElement x="0" y="0" width="60" height="20"/>
+								<text><![CDATA[Total cols]]></text>
+							</staticText>
+						</cellContents>
+					</crosstabTotalColumnHeader>
+				</columnGroup>
+				<measure name="qty_sum" class="java.lang.Integer" calculation="Sum">
+					<measureExpression><![CDATA[$F{qty}]]></measureExpression>
+				</measure>
+				<crosstabCell width="60" height="20">
+					<cellContents>
+						<textField>
+							<reportElement style="Cell" x="0" y="0" width="60" height="20"/>
+							<textFieldExpression><![CDATA["c" + $V{qty_sum}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell width="60" height="20" columnTotalGroup="grp">
+					<cellContents backcolor="#BFFFBF" mode="Opaque">
+						<textField>
+							<reportElement x="0" y="0" width="60" height="20"/>
+							<textFieldExpression><![CDATA["tc" + $V{qty_sum}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell width="60" height="20" rowTotalGroup="item">
+					<cellContents backcolor="#BFFFBF" mode="Opaque">
+						<textField>
+							<reportElement x="0" y="0" width="60" height="20"/>
+							<textFieldExpression><![CDATA["tr" + $V{qty_sum}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell width="60" height="20" rowTotalGroup="item" columnTotalGroup="grp">
+					<cellContents backcolor="#BFFFBF" mode="Opaque">
+						<textField>
+							<reportElement x="0" y="0" width="60" height="20"/>
+							<textFieldExpression><![CDATA["tt" + $V{qty_sum}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<whenNoDataCell>
+					<cellContents>
+						<staticText>
+							<reportElement x="0" y="0" width="200" height="20"/>
+							<text><![CDATA[No crosstab data]]></text>
+						</staticText>
+					</cellContents>
+				</whenNoDataCell>
+			</crosstab>
+		</band>
+	</title>
+</jasperReport>

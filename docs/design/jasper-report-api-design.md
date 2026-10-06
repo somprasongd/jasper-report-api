@@ -550,7 +550,7 @@ tenants:
 8. `/validate`
 9. ทดสอบ: unit (binder, resolver, path traversal), integration (Testcontainers PostgreSQL + MinIO/rustfs), render จริงตรวจจำนวนหน้า/ฟอนต์ฝังใน PDF
 
-**Phase 2**: async jobs, `xlsx`/`csv`, virtualizer, alias ฟอนต์ PSK ชั่วคราว (ถ้าต้องการ)
+**Phase 2**: async jobs, alias ฟอนต์ PSK ชั่วคราว (ถ้าต้องการ) — `xlsx`/`csv` และ virtualizer ทำแล้ว ดู [§20](#20-xlsxcsv-virtualizer-และสัญญา-openapi-ส่วนของ-phase-2-ที่ทำแล้ว)
 
 **Phase 3**: เครื่องมือ/ขั้นตอนแปลง JRXML 6.x → 7 และย้าย client ของ pdf
 
@@ -644,3 +644,50 @@ phase 1 ทำ http(s) แบบ "ไฟล์เดียว" ซึ่ง **�
 | ข้อจำกัดที่เหลือ | URL ที่มี query string (pre-signed) ใช้เป็นไฟล์ JRXML ได้แต่ไม่ดาวน์โหลด `.properties` ให้; ดาวน์โหลดทั้งชุดซ้ำทุก check-interval (ยังไม่ใช้ conditional GET); รูปแบบ URL เต็มดึงตอน render จึงไม่ได้ stale-if-error; ถ้าต้นทางล่ม request แรกต่อ key หลังหมดอายุจะรอ timeout หนึ่งครั้งก่อนใช้ของเก่า |
 
 ทดสอบด้วย HTTP server จริงในเทสต์ (`HttpSourceTest`): หลัก + subreport + bundle ของทั้งสอง, `locale: en`, แก้ `.properties` ที่ต้นทางแล้วเปลี่ยน, subreport แบบ `SUBREPORT_DIR`, รูปแบบ URL เต็ม, subreport ที่ไม่ได้ระบุ, host/scheme นอก allowlist, ไฟล์ไม่มี ยังไม่ได้ทดสอบกับ https/host จริงและ pre-signed URL
+
+## 20. xlsx/csv, virtualizer และสัญญา OpenAPI (ส่วนของ phase 2 ที่ทำแล้ว)
+
+เพิ่มหลัง v0.2.0 (2026-10-06) ส่วนที่เหลือของ phase 2 คือ async jobs และ alias ฟอนต์ `TH SarabunPSK`
+
+### 20.1 xlsx / csv
+
+| เรื่อง | การตัดสินใจ | เหตุผล |
+|---|---|---|
+| ตัวส่งออก | xlsx: `net.sf.jasperreports.engine.export.ooxml.JRXlsxExporter` (อยู่ใน jar หลัก); csv: `JRCsvExporter` | ตรวจใน 7.0.8 แล้วว่า xlsx ไม่ต้องใช้ `jasperreports-excel-poi` (โมดูลนั้นมีเฉพาะ `.xls` เก่า) จึงไม่เพิ่ม POI กับ dependency ที่ตามมา (xmlbeans, log4j-api ฯลฯ) เข้า jar |
+| ขอบเขต format | `pdf`, `xlsx`, `csv` เท่านั้น (`OutputFormat`); `xls`, `docx`, `html` ตอบ `400 FORMAT_UNSUPPORTED` | ไม่มีผู้ใช้ขอ และแต่ละ format เพิ่มพื้นที่ต้องทดสอบ |
+| ตั้งค่า xlsx | ชีตเดียวต่อเนื่อง (`onePagePerSheet=false`), ตรวจชนิดเซลล์, พื้นหลังหน้าไม่ขาว, ตัดแถว/คอลัมน์ว่างระหว่างกัน | ผลที่คนเอาไปเปิดใน Excel ต้องการ ไม่ใช่สำเนาของหน้ากระดาษ |
+| ไม่บังคับ `ignorePagination` | ปล่อยให้ผู้เขียนรายงานตั้งใน JRXML | JasperReports แยกไม่ได้ว่า `false` ตั้งเองหรือค่าเริ่มต้น และการบังคับจะเปลี่ยนผลของ `max-pages` โดยไม่บอก |
+| csv | UTF-8 + BOM (`report.export.csv-bom`, ค่าเริ่มต้น `true`), `,` และ `CRLF` | Excel บน Windows อ่าน UTF-8 ไม่มี BOM เป็นภาษาท้องถิ่น ภาษาไทยจะเพี้ยน; โปรแกรมอื่นข้าม BOM ได้ |
+| `Content-Disposition` | pdf `inline`, xlsx/csv `attachment`; เติมนามสกุลของ format ให้ถ้า `fileName` ยังไม่มี | เบราว์เซอร์เปิด pdf ได้เอง แต่ไม่ควรพยายามเปิด xlsx |
+
+ทดสอบ: `ExportFormatsTest` (เปิดไฟล์ xlsx เป็น zip ตรวจข้อความไทย, รูป/QR ฝังเป็น `xl/media/`, BOM, ชื่อไฟล์) และ `CsvWithoutBomTest`
+
+### 20.2 virtualizer
+
+- ทุก render สร้าง `JRSwapFileVirtualizer` ของตัวเอง (`RenderVirtualizers`) ใส่ผ่าน `REPORT_VIRTUALIZER` และ `RenderService` ปิดด้วย try-with-resources จึงลบไฟล์เสมอ รวมกรณีล้มกลางทาง (ทดสอบด้วย `PAGE_LIMIT_EXCEEDED` ที่เกิดหลังสลับหน้าลงไฟล์แล้ว)
+- เปิดเป็นค่าเริ่มต้นเพราะ JasperReports สลับลงไฟล์เมื่อเกิน `max-pages-in-memory` เท่านั้น รายงานเล็กเสียแค่การสร้างไฟล์เปล่า; ถ้าสร้างไฟล์ไม่ได้ให้ render ต่อโดยไม่ใช้ virtualizer และ log WARN ไม่ให้ระบบล้มเพราะโฟลเดอร์เขียนไม่ได้
+- ไฟล์ค้างจาก process ที่ล้ม (`swap_*` เก่ากว่า 1 ชั่วโมง ซึ่งเกินเวลา render สูงสุดมาก) ลบตอนเริ่มระบบ ไม่ลบไฟล์ใหม่เผื่อมี process อื่นใช้โฟลเดอร์เดียวกัน
+- ลดเฉพาะ heap ระหว่าง fill ผลลัพธ์ยังประกอบใน memory ก่อนตอบ ถ้าต้องการลดด้วยต้องทำ async (ยังไม่ทำ)
+- ทดสอบ: `VirtualizerTest` (ตั้ง 2 หน้าใน memory แล้ว render รายงาน ~20 หน้า เฝ้าดูโฟลเดอร์ swap ระหว่างทำงานว่ามีไฟล์ที่ขนาด > 0 จริง ผลลัพธ์ครบ และไฟล์ถูกลบ) และ `RenderVirtualizersTest`
+
+### 20.3 สัญญา OpenAPI
+
+เขียนมือที่ `src/main/resources/openapi/openapi.yaml` เปิดที่ `GET /api/v1/openapi.yaml` (ไม่ต้องใช้ key) ไม่ใช้ springdoc เพราะ (1) ต้องอธิบาย `code` ของ error และ response สามชนิดซึ่ง annotation ทำได้ไม่ดี (2) ไม่ต้องเพิ่ม dependency และ reflection ตอนเริ่มระบบ (3) เทสต์ `OpenApiContractTest` กันไม่ให้ไฟล์ล้าหลังโค้ด: เทียบ route ทั้งหมดกับ `RequestMappingHandlerMapping`, ฟิลด์กับ record `RenderRequest`/`ReportRef`/`ParamInput`, `format` กับ `OutputFormat` และ `ErrorCode` กับ code ที่ค้นได้ใน `src/main/java` (ทดลองลบ code หรือเปลี่ยนชื่อฟิลด์แล้วเทสต์ล้มจริง)
+
+### 20.4 เทสต์ subreport ของ JSON `data`
+
+`JsonSubreportTest` ยืนยันวิธีใน README: `JsonDataSource.subDataSource("visits")` จาก `$P{REPORT_DATA_SOURCE}` ส่งให้ subreport — แต่ละผู้ป่วยได้เฉพาะ array ของตัวเอง, array ว่างหรือไม่มี key ไม่ทำให้ล้ม
+
+### 20.5 ตัวแปลง JRXML 6.x → 7 (`POST /v1/reports/convert`)
+
+ทำใน phase 3 ตามแผน §16 เป็น Java ล้วน (DOM + XML ของ JDK ไม่มี dependency เพิ่ม) แทนที่จะรัน JR 6 ใน class loader แยก เพราะ JR 6 กับ 7 ใช้ชื่อคลาสเดียวกัน แปลงข้าม engine ไม่ได้ และไม่อยากแบก JR 6 ไว้ใน jar
+
+- **ตรวจจาก engine จริง ไม่ใช่จากความจำ:** loader ของ JR 7.0.8 ปฏิเสธ attribute/element ที่ไม่รู้จัก (`UnrecognizedPropertyException`) แต่บางตำแหน่งที่ผิดที่ถูกทิ้งเงียบ (เช่น `<import value="x"/>` โหลดเป็น import ว่าง, `<style>` ซ้อนใน `conditionalStyle`) จึงมีเทสต์ round trip ผ่าน `JRXmlWriter` แยกต่างหาก "โหลดได้" อย่างเดียวพิสูจน์ไม่ได้
+- **ไม่ทิ้งเงียบ:** เทสต์ฉีด attribute และ child ที่ไม่รู้จักเข้าทุก element ของ fixture ทุกไฟล์ ต้องมี warning ทุกครั้ง; element ที่แปลงไม่ได้ถูกแทนด้วย `<!-- not converted: ตำแหน่ง -->`
+- **รายชื่อคลาสที่ย้าย/หายใน 7** (`RelocatedClasses`) ได้จากการ diff jar 6.21.5 กับโมดูลของ 7.0.8 — เตือนอย่างเดียว ไม่เขียน expression ใหม่
+- **`<reportFont>`:** JR 6.17–6.21 ไม่อ่าน `size` จาก `reportFont` (ข้อความจึงออก 10pt) ตัวแปลงรักษาผลที่เห็นเดิมและเตือน ไม่ "แก้" ให้เป็นขนาดที่ประกาศ — เปลี่ยนได้ถ้าทีมรายงานต้องการ
+- **ผลตรวจกับรายงานจริงของนักพัฒนา (รันครั้งเดียว 2026-10-06 ไม่อยู่ใน repo เพราะเป็นไฟล์ลูกค้า):** 674 ไฟล์ซ้ำกันบางส่วน เหลือ 471 ไฟล์ต่างกัน แปลงได้ทุกไฟล์ 450 ไม่มี warning, 21 มี warning (14 `JsonDataSource` ย้ายที่, 3 ขนาด `reportFont`, 2 barbecue, 2 query `plsql`); โหลดใน JR 7 ได้ 467 (4 ที่ไม่ได้ทั้งหมดมี warning ไว้ก่อน); คอมไพล์ได้ 408 โดย 45 จาก 59 ที่ไม่ได้ก็ไม่ผ่านใน JR 6 เช่นกัน (ขาดคลาสช่วยของลูกค้า) อีก 14 คือ `JsonDataSource` ที่เตือนแล้ว
+- **เทียบ design ที่โหลดแล้ว:** dump ทุก property ของ JR 6.21.5 (ต้นฉบับ) กับ JR 7 (ผลแปลง) 467 รายงาน ราว 1.37 ล้านบรรทัด ต่างกัน 0 (ทดลองทำให้ตัวแปลงพิมพ์ `isBold` ผิด ไฟล์ต่าง 363 ไฟล์ จึงเชื่อได้ว่าเทสต์จับความผิดได้)
+- **เทียบการ render:** fill ได้ทั้งสอง engine 282 รายงาน (อีก 188 ล้มทั้งคู่ เพราะคลาสลูกค้าหรือข้อมูลขาด) จำนวนหน้า ข้อความ PDF และฟอนต์ตรงกันทั้งหมด; ต่างแค่ 1 ไฟล์ที่ JR 6 ตัด newline ท้าย static text หนึ่งตัว ส่วน JR 7 เก็บไว้ (เป็นพฤติกรรมของ engine ไม่ใช่ของตัวแปลง); ความต่างพิกเซลสูงสุดต่อหน้า 0.15%
+- **ยังไม่ได้ตรวจ:** property ระดับรายงานของ JR 6 ที่อาจถูกเปลี่ยนชื่อ/เลิกใน 7 (ไม่อ้างว่าครอบคลุม), chart/map/part (ไม่แปลง), และการเปิดผลลัพธ์ใน Jaspersoft Studio 7 จริง
+- ขอบเขตของ endpoint: รับ JSON `{"jrxml": ...}` จำกัดด้วย `report.sources.max-bytes` (ตัวแปลงเองรับได้ 16M ตัวอักษรแต่ถือทั้งไฟล์เป็น DOM จึงจำกัดที่ขอบ API) และเพิ่ม warning ถ้าผลลัพธ์โหลดใน JR 7 ไม่ได้

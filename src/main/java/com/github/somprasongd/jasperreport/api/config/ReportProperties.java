@@ -21,6 +21,8 @@ public record ReportProperties(
         @DefaultValue Datasource datasource,
         @DefaultValue Parameters parameters,
         @DefaultValue Limits limits,
+        @DefaultValue Export export,
+        @DefaultValue Virtualizer virtualizer,
         @DefaultValue Security security) {
 
     public record Sources(
@@ -76,6 +78,22 @@ public record ReportProperties(
             @DefaultValue("500") int maxPages,
             /** Largest {@code data} (JSON) a render request may carry. */
             @DefaultValue("10MB") DataSize maxDataSize) {
+    }
+
+    public record Export(
+            /** UTF-8 byte order mark at the start of CSV output: Excel needs it to read Thai text, other readers ignore it. */
+            @DefaultValue("true") boolean csvBom) {
+    }
+
+    /**
+     * Keeps the pages of a large report in a swap file instead of the heap while it is filled. Only pages beyond
+     * {@code maxPagesInMemory} are written out, so a small report never touches the disk beyond creating the file.
+     */
+    public record Virtualizer(
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("100") int maxPagesInMemory,
+            /** Empty = {@code swap} under {@code report.cache.work-dir}. */
+            @DefaultValue("") String directory) {
     }
 
     public record Security(@DefaultValue ApiKey apiKey, @DefaultValue List<ApiKeyEntry> apiKeys) {

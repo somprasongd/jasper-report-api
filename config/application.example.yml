@@ -31,6 +31,11 @@ report:
     fill-timeout: 60s
     query-timeout: 30s
     max-pages: 500
+  export:
+    csv-bom: true               # UTF-8 byte order mark at the start of CSV so Excel reads Thai
+  virtualizer:                  # large reports: pages beyond max-pages-in-memory go to a swap file while filling
+    enabled: true
+    max-pages-in-memory: 100
 
 # Logical datasource names (opd, ipd, ...) are what clients and reports use; the real databases live here only.
 tenants:

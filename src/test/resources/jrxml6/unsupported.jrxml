@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic JR 6 report with constructs the converter cannot (or should not silently) convert: a chart, barbecue and map
+     components, a query language JR 7 ships no executer for, and a class JR 7 moved. -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="unsupported" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="44444444-4444-4444-8444-000000000001">
+	<import value="net.sf.jasperreports.engine.data.JsonDataSource"/>
+	<queryString language="plsql">
+		<![CDATA[begin null; end;]]>
+	</queryString>
+	<title>
+		<band height="300">
+			<staticText>
+				<reportElement x="0" y="0" width="200" height="20" uuid="44444444-4444-4444-8444-000000000010"/>
+				<text><![CDATA[Before the chart]]></text>
+			</staticText>
+			<pieChart>
+				<chart evaluationTime="Report">
+					<reportElement x="0" y="30" width="200" height="100" uuid="44444444-4444-4444-8444-000000000011"/>
+					<chartTitle/>
+					<chartSubtitle/>
+					<chartLegend/>
+				</chart>
+				<pieDataset>
+					<dataset/>
+					<keyExpression><![CDATA["a"]]></keyExpression>
+					<valueExpression><![CDATA[Integer.valueOf(1)]]></valueExpression>
+					<labelExpression><![CDATA["A"]]></labelExpression>
+				</pieDataset>
+				<piePlot>
+					<plot/>
+				</piePlot>
+			</pieChart>
+			<componentElement>
+				<reportElement x="210" y="30" width="200" height="50"/>
+				<jr:barbecue xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" type="Code128" drawText="true" checksumRequired="false">
+					<jr:codeExpression><![CDATA["BBQ-1"]]></jr:codeExpression>
+				</jr:barbecue>
+			</componentElement>
+			<componentElement>
+				<reportElement x="210" y="90" width="200" height="100"/>
+				<jr:map xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd" mapType="roadmap">
+					<jr:latitudeExpression><![CDATA[Double.valueOf(13.7)]]></jr:latitudeExpression>
+					<jr:longitudeExpression><![CDATA[Double.valueOf(100.5)]]></jr:longitudeExpression>
+					<jr:zoomExpression><![CDATA[Integer.valueOf(5)]]></jr:zoomExpression>
+				</jr:map>
+			</componentElement>
+			<textField>
+				<reportElement x="0" y="200" width="400" height="20"/>
+				<textFieldExpression><![CDATA[String.valueOf(net.sf.jasperreports.engine.data.JsonDataSource.class)]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="0" y="230" width="200" height="20" uuid="44444444-4444-4444-8444-000000000012"/>
+				<text><![CDATA[After the chart]]></text>
+			</staticText>
+		</band>
+	</title>
+</jasperReport>

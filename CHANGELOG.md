@@ -11,6 +11,11 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 - `report.sources.http.allowed-hosts` (`HTTP_ALLOWED_HOSTS`) accepts `host:port` (only that port; a URL without a port means 80/443) and `*.domain` wildcards (every sub-domain at any depth, not the domain itself), for example `*.reports.svc.cluster.local`. A plain `host` still allows every port. A malformed entry now stops the API at startup.
 - CI workflow: tests and a Docker image build on every push to `main` and every pull request.
 - Dependabot: weekly update PRs for Maven dependencies, the Docker base images and GitHub Actions.
+- `format: "xlsx"` and `format: "csv"` in render requests (they used to answer 400 `FORMAT_UNSUPPORTED`). Spreadsheets and CSV are sent as attachments; CSV is UTF-8 with a byte order mark so Excel reads Thai (`report.export.csv-bom: false` turns it off). Any other `format` is still refused. `.xls`, `docx` and `html` are not supported.
+- Swap-file virtualizer for every render: only `report.virtualizer.max-pages-in-memory` (default 100) pages of a report stay on the heap while it is filled, the rest go to a temporary file under `report.cache.work-dir/swap` that is deleted when the render ends. `report.virtualizer.enabled: false` turns it off; if the swap file cannot be created the render goes on without it.
+- OpenAPI 3.1 contract at `GET /api/v1/openapi.yaml` (no API key needed), written by hand in `src/main/resources/openapi/openapi.yaml` and checked against the code by `OpenApiContractTest` (routes, request fields, formats, error codes).
+- `POST /api/v1/reports/convert` converts a JasperReports 6.x JRXML (including the DOCTYPE-era syntax) to the JR 7 syntax so reports can be migrated without opening each one in Jaspersoft Studio 7; `scripts/jrxml-upgrade.sh` calls it for a file. Constructs without a faithful JR 7 equivalent (charts, maps, barbecue, moved JasperReports classes, `reportFont` sizes, ...) are listed in `warnings` with their location instead of being dropped. New error codes `CONVERT_FAILED` and `JRXML_TOO_LARGE`.
+- Tests: sub-reports fed from a nested array of the request `data` (`JsonDataSource.subDataSource`).
 
 ### Changed
 - `SOURCE_NOT_ALLOWED` for a host outside the allowlist names the host with its port (`host 'files.internal:443' ...`).

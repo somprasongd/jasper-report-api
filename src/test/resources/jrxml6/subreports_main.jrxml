@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic JR 6 main report: subreports fed by a connection and by a data source, parameters, a parameters map and return values. -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="subreports_main" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="22222222-2222-4222-8222-000000000001">
+	<parameter name="SUB" class="net.sf.jasperreports.engine.JasperReport"/>
+	<parameter name="ROWS" class="net.sf.jasperreports.engine.JRDataSource"/>
+	<parameter name="SUB_PARAMS" class="java.util.Map"/>
+	<!-- a variable that receives a return value must keep its own value from record to record, hence the self-reference -->
+	<variable name="from_conn" class="java.lang.Integer" calculation="Nothing">
+		<variableExpression><![CDATA[$V{from_conn}]]></variableExpression>
+		<initialValueExpression><![CDATA[Integer.valueOf(0)]]></initialValueExpression>
+	</variable>
+	<variable name="from_ds" class="java.lang.Integer" calculation="Nothing">
+		<variableExpression><![CDATA[$V{from_ds}]]></variableExpression>
+	</variable>
+	<title>
+		<band height="230">
+			<textField>
+				<reportElement x="0" y="0" width="555" height="20"/>
+				<textElement>
+					<font fontName="DejaVu Sans"/>
+				</textElement>
+				<textFieldExpression><![CDATA["Main report"]]></textFieldExpression>
+			</textField>
+			<subreport isUsingCache="true">
+				<reportElement key="sub_conn" x="0" y="20" width="555" height="80" uuid="22222222-2222-4222-8222-000000000010"/>
+				<subreportParameter name="title">
+					<subreportParameterExpression><![CDATA["Via connection"]]></subreportParameterExpression>
+				</subreportParameter>
+				<subreportParameter name="limit">
+					<subreportParameterExpression><![CDATA[Integer.valueOf(2)]]></subreportParameterExpression>
+				</subreportParameter>
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				<returnValue subreportVariable="row_count" toVariable="from_conn" calculation="Sum"/>
+				<subreportExpression class="net.sf.jasperreports.engine.JasperReport"><![CDATA[$P{SUB}]]></subreportExpression>
+			</subreport>
+			<subreport isUsingCache="false">
+				<reportElement key="sub_ds" x="0" y="110" width="555" height="80" uuid="22222222-2222-4222-8222-000000000011"/>
+				<parametersMapExpression><![CDATA[$P{SUB_PARAMS}]]></parametersMapExpression>
+				<subreportParameter name="limit">
+					<subreportParameterExpression><![CDATA[Integer.valueOf(99)]]></subreportParameterExpression>
+				</subreportParameter>
+				<dataSourceExpression><![CDATA[$P{ROWS}]]></dataSourceExpression>
+				<returnValue subreportVariable="row_count" toVariable="from_ds"/>
+				<subreportExpression class="net.sf.jasperreports.engine.JasperReport"><![CDATA[$P{SUB}]]></subreportExpression>
+			</subreport>
+			<textField evaluationTime="Report">
+				<reportElement x="0" y="200" width="555" height="20"/>
+				<textElement>
+					<font fontName="DejaVu Sans"/>
+				</textElement>
+				<textFieldExpression><![CDATA["from_conn=" + $V{from_conn} + " from_ds=" + $V{from_ds}]]></textFieldExpression>
+			</textField>
+		</band>
+	</title>
+</jasperReport>

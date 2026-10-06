@@ -1,0 +1,15 @@
+<jasperReport name="sub_json_visits" language="groovy" pageWidth="535" pageHeight="842" columnWidth="535" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0201">
+	<field name="date" class="java.lang.String">
+		<property name="net.sf.jasperreports.json.field.expression" value="date"/>
+	</field>
+	<field name="dept" class="java.lang.String">
+		<property name="net.sf.jasperreports.json.field.expression" value="dept"/>
+	</field>
+	<detail>
+		<band height="20">
+			<element kind="textField" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0202" x="0" y="0" width="535" height="20" fontName="TH Sarabun New" fontSize="14">
+				<expression><![CDATA["- " + $F{date} + " " + $F{dept}]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

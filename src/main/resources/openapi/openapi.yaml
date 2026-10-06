@@ -1,0 +1,495 @@
+openapi: 3.1.0
+info:
+  title: Jasper Report API
+  # Version of this contract (path prefix /v1), not of the application: bump the minor for additions, the major with a new path prefix.
+  version: 1.1.0
+  summary: Renders JasperReports 7 JRXML reports to PDF, XLSX or CSV.
+  description: |
+    Clients send the report to use (a folder, `s3://` or `https://` location of a JRXML) and its parameters; the
+    server owns the database credentials and only a logical datasource name travels in the request.
+
+    Errors are `application/problem+json` (RFC 9457) with a stable machine-readable `code`.
+
+    This document is served by the API itself at `GET /api/v1/openapi.yaml`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: /api
+    description: Same host the document was loaded from
+tags:
+  - name: reports
+    description: Render and inspect reports
+  - name: operations
+    description: Health and metrics
+security:
+  - ApiKey: []
+  - Bearer: []
+
+paths:
+  /v1/reports/render:
+    post:
+      tags: [reports]
+      operationId: renderReport
+      summary: Render a report
+      description: |
+        Resolves the report (compiling it once per version), fills it from the chosen datasource or from `data` and
+        returns the document in the requested `format`.
+
+        Without `format` the answer is a PDF, shown inline by browsers; `xlsx` and `csv` are sent as attachments.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderRequest'
+            examples:
+              database:
+                summary: Report from S3 on a named database
+                value:
+                  datasource: opd
+                  mainReport: {name: ใบรับรองแพทย์, url: 's3://reports/opd/medical_certificate/main.jrxml'}
+                  parameters:
+                    - {name: visit_id, value: '1234'}
+                    - {name: print_time, value: '2026-10-06T10:30:00+07:00'}
+                  locale: en
+              json:
+                summary: Spreadsheet from JSON, no database
+                value:
+                  mainReport: {url: 'patients/list.jrxml'}
+                  format: xlsx
+                  data: {patients: [{name: สมชาย, visits: 2}]}
+      responses:
+        '200':
+          $ref: '#/components/responses/Rendered'
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503':
+          description: All render slots are busy (`RENDER_BUSY`); retry after the number of seconds in `Retry-After`.
+          headers:
+            Retry-After:
+              schema: {type: integer}
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '504': {$ref: '#/components/responses/Problem'}
+
+  /v1/jasper/generate:
+    post:
+      tags: [reports]
+      operationId: generateReport
+      summary: Render a report (alias for clients of jasperreports-pdf)
+      description: Identical to `POST /v1/reports/render`; kept so existing `jasperreports-pdf` clients work unchanged.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/Rendered'
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '500': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+        '503':
+          description: All render slots are busy (`RENDER_BUSY`); retry after the number of seconds in `Retry-After`.
+          headers:
+            Retry-After:
+              schema: {type: integer}
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+        '504': {$ref: '#/components/responses/Problem'}
+
+  /v1/reports/validate:
+    post:
+      tags: [reports]
+      operationId: validateReport
+      summary: Compile a report and describe what the API sees in it
+      description: |
+        Takes the same body as render (`parameters` may be left out). Compiles the report but runs no query and uses
+        no render slot.
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderRequest'
+      responses:
+        '200':
+          description: What was found in the report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '502': {$ref: '#/components/responses/Problem'}
+
+  /v1/reports/convert:
+    post:
+      tags: [reports]
+      operationId: convertReport
+      summary: Convert a JasperReports 6.x JRXML to the JR 7 syntax
+      description: |
+        A migration helper, meant to run once per report when it is imported rather than on every render. It takes no
+        render slot and keeps nothing. Anything that has no faithful JR 7 equivalent is listed in `warnings` (and
+        marked in the result), never dropped silently. A result that does not load in JasperReports 7 says so in
+        `warnings`. A report already in the JR 7 syntax comes back unchanged with `alreadyCurrent: true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConvertRequest'
+      responses:
+        '200':
+          description: The converted report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConvertResult'
+        '400': {$ref: '#/components/responses/Problem'}
+        '401': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+
+  /v1/openapi.yaml:
+    get:
+      tags: [operations]
+      operationId: getOpenApiDocument
+      summary: This document
+      security: []
+      responses:
+        '200':
+          description: The OpenAPI 3.1 document
+          content:
+            application/yaml:
+              schema: {type: string}
+
+  /healthz:
+    get:
+      tags: [operations]
+      operationId: healthz
+      summary: Liveness (kept at the path of the previous services)
+      security: []
+      responses:
+        '200':
+          description: The process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, const: UP}
+
+  /actuator/health/liveness:
+    get:
+      tags: [operations]
+      operationId: livenessProbe
+      summary: Liveness probe
+      security: []
+      responses:
+        '200': {description: The process is up}
+        '503': {description: The process is not live}
+
+  /actuator/health/readiness:
+    get:
+      tags: [operations]
+      operationId: readinessProbe
+      summary: Readiness probe
+      description: Also checks every configured database and the S3 storage.
+      security: []
+      responses:
+        '200': {description: Ready for traffic}
+        '503': {description: A datasource or the storage is down}
+
+  /actuator/prometheus:
+    get:
+      tags: [operations]
+      operationId: prometheusMetrics
+      summary: Prometheus metrics
+      description: Needs an API key like the other endpoints; a bearer token suits scrapers.
+      responses:
+        '200':
+          description: Metrics in the Prometheus text format
+          content:
+            text/plain:
+              schema: {type: string}
+        '401': {$ref: '#/components/responses/Problem'}
+
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: The header name is configurable (`report.security.api-key.header`). Key mode `optional` or `disabled` lets callers leave it out, but a wrong key is always rejected.
+    Bearer:
+      type: http
+      scheme: bearer
+      description: The same key, sent as a bearer token.
+
+  parameters:
+    TenantId:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      description: Tenant whose datasources are used. Wins over `tenant` in the body; none means `default`.
+      schema: {type: string}
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Correlation id. One is generated when absent; it is echoed in the response and every log line.
+      schema: {type: string}
+
+  responses:
+    Rendered:
+      description: The rendered document
+      headers:
+        Content-Disposition:
+          description: '`inline` for pdf, `attachment` for xlsx and csv; `filename*` is UTF-8 encoded.'
+          schema: {type: string}
+        X-Report-Version:
+          description: Fingerprint of the report folder that was used; changes whenever any file in it changes.
+          schema: {type: string}
+        Content-Language:
+          description: Language the report was rendered in, e.g. `th` or `en`.
+          schema: {type: string}
+        X-Request-Id:
+          schema: {type: string}
+      content:
+        application/pdf:
+          schema: {type: string, format: binary}
+        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+          schema: {type: string, format: binary}
+        text/csv:
+          description: UTF-8, with a byte order mark unless `report.export.csv-bom` is false.
+          schema: {type: string, format: binary}
+    Problem:
+      description: The request failed; `code` says why (see `ErrorCode`).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+
+  schemas:
+    RenderRequest:
+      type: object
+      required: [mainReport]
+      properties:
+        mainReport:
+          $ref: '#/components/schemas/ReportRef'
+        subReports:
+          type: array
+          description: |
+            Needed only for `https://` reports, where every sub-report in use must be listed (each is saved as
+            `<name>.jrxml` next to the main report). Folders and S3 hold them already, except in `SUBREPORT_DIR`
+            style reports, where the list picks which sub-reports are compiled.
+          items:
+            $ref: '#/components/schemas/ReportRef'
+        parameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/Parameter'
+        datasource:
+          type: string
+          description: |
+            Logical datasource name of the tenant (e.g. `opd`). Falls back to the `report.datasource` property of the
+            JRXML, then the tenant default. `none` fills a report that has no query with a single empty record.
+            Cannot be combined with `data`.
+        data:
+          description: |
+            JSON read by a report with `<query language="json">` instead of a database. Cannot be combined with
+            `datasource`; limited by `report.limits.max-data-size`. Never logged.
+        tenant:
+          type: string
+          description: Tenant name; the `X-Tenant-Id` header wins. None means `default`.
+        format:
+          type: string
+          enum: [pdf, xlsx, csv]
+          default: pdf
+          description: Case-insensitive.
+        fileName:
+          type: string
+          description: Name in `Content-Disposition` (Thai allowed). Default is `mainReport.name`, then the JRXML name. The extension of the format is added when missing.
+        locale:
+          type: string
+          description: Language tag (`th`, `en`, `en-US`). Wins over the language the report declares itself.
+          examples: [th, en]
+
+    ReportRef:
+      type: object
+      required: [url]
+      properties:
+        name:
+          type: string
+          description: For `mainReport`, the file name when `fileName` is not given. For a sub-report, the name it is saved and referenced under.
+        url:
+          type: string
+          description: |
+            Where the JRXML is. No scheme = folder under `report.sources.local.root`; `s3://bucket/path/main.jrxml`
+            (allow-listed buckets); `https://host/path/main.jrxml` (allow-listed hosts, pre-signed URLs work).
+        modified_at:
+          type: integer
+          format: int64
+          deprecated: true
+          description: Accepted for compatibility with `jasperreports-pdf` and ignored.
+
+    Parameter:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        value:
+          description: String, number, boolean, array or null. It is converted to the class the JRXML declares for the parameter.
+        type:
+          type: string
+          enum: [string, integer, number, date, time, timestamp, bool, array_str, array_int]
+          description: Only needed for parameters declared with a loose class such as `Object` or `Collection`.
+
+    ConvertRequest:
+      type: object
+      required: [jrxml]
+      properties:
+        jrxml:
+          type: string
+          description: The JRXML text. Limited by `report.sources.max-bytes`. DOCTYPE declarations and external entities are refused.
+
+    ConvertResult:
+      type: object
+      required: [jrxml, alreadyCurrent, warnings]
+      properties:
+        jrxml:
+          type: string
+          description: The report in the JR 7 syntax (tab-indented, with an XML declaration). Expressions are copied as they are.
+        alreadyCurrent:
+          type: boolean
+          description: The input was already in the JR 7 syntax and is returned unchanged.
+        warnings:
+          type: array
+          description: |
+            One entry per point that needs a person's attention, each starting with where it is
+            (e.g. `title/band/pieChart[1]: ...`): charts, maps and other components JR 7 no longer ships here,
+            JasperReports classes that moved in version 7, `reportFont` sizes, query languages JR 7 cannot load.
+          items: {type: string}
+
+    ValidationResult:
+      type: object
+      properties:
+        report: {type: string, description: Main JRXML file name.}
+        bundle: {type: string, description: Where the report folder came from.}
+        version: {type: string, description: Same fingerprint as `X-Report-Version`.}
+        tenant: {type: string}
+        datasource:
+          type: object
+          properties:
+            declaredInReport: {type: [string, 'null']}
+            requested: {type: [string, 'null']}
+            resolved: {type: [string, 'null']}
+        locale:
+          type: object
+          properties:
+            declaredInReport: {type: [string, 'null']}
+            requested: {type: [string, 'null']}
+            resolved: {type: [string, 'null']}
+        messages:
+          type: object
+          description: One entry per JRXML file that declares a `resourceBundle`.
+          additionalProperties:
+            type: object
+            properties:
+              bundle: {type: string}
+              languages: {type: array, items: {type: string}}
+              keysUsed: {type: integer}
+        parameters:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              class: {type: string}
+              nestedType: {type: string}
+              hasDefault: {type: boolean}
+        fonts:
+          type: object
+          properties:
+            used: {type: array, items: {type: string}}
+            missing: {type: array, items: {type: string}}
+        subreports:
+          type: array
+          items: {type: string}
+        warnings:
+          type: array
+          description: 'Risky or inconsistent constructs: missing message keys, `$P!{}` in SQL, unavailable fonts, an unresolvable datasource.'
+          items: {type: string}
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details.
+      required: [status, code]
+      properties:
+        type: {type: string, default: 'about:blank'}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code:
+          description: Stable machine-readable reason. Failures raised by the framework itself (unsupported media type, method not allowed, ...) use `HTTP_<status>`.
+          anyOf:
+            - $ref: '#/components/schemas/ErrorCode'
+            - type: string
+              pattern: '^HTTP_[0-9]{3}$'
+        requestId: {type: string}
+
+    ErrorCode:
+      type: string
+      enum:
+        - API_KEY_MISSING
+        - API_KEY_INVALID
+        - VALIDATION_FAILED
+        - TENANT_UNKNOWN
+        - DATASOURCE_UNKNOWN
+        - DATASOURCE_UNRESOLVED
+        - DATASOURCE_OVERRIDE_DENIED
+        - DATASOURCE_NONE_NOT_ALLOWED
+        - DATASOURCE_MISCONFIGURED
+        - DATA_AND_DATASOURCE
+        - CONVERT_FAILED
+        - JRXML_TOO_LARGE
+        - DATA_NOT_SUPPORTED
+        - DATA_TOO_LARGE
+        - SOURCE_NOT_ALLOWED
+        - PARAMETER_INVALID
+        - FORMAT_UNSUPPORTED
+        - LOCALE_INVALID
+        - REPORT_NOT_FOUND
+        - REPORT_COMPILE_FAILED
+        - PAGE_LIMIT_EXCEEDED
+        - RENDER_BUSY
+        - RENDER_TIMEOUT
+        - QUERY_TIMEOUT
+        - DATABASE_ERROR
+        - STORAGE_ERROR
+        - INTERNAL_ERROR

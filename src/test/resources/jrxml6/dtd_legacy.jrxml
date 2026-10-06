@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"  ?>
+<!-- Synthetic report in the DTD era format: no namespace, a DOCTYPE, report fonts, border attributes and graphicElement pens. -->
+<!DOCTYPE jasperReport PUBLIC "//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport name="dtd_legacy" columnCount="1" printOrder="Vertical" orientation="Portrait" pageWidth="595" pageHeight="842" columnWidth="555" columnSpacing="0" leftMargin="20" rightMargin="20" topMargin="30" bottomMargin="30" whenNoDataType="NoPages" isTitleNewPage="false" isSummaryNewPage="false" isFloatColumnFooter="false">
+	<property name="ireport.zoom" value="1.0"/>
+	<reportFont name="Normal" isDefault="true" fontName="DejaVu Sans" size="10" isBold="false" isItalic="false" isUnderline="false" isStrikeThrough="false" pdfFontName="Helvetica" pdfEncoding="Cp1252" isPdfEmbedded="false"/>
+	<reportFont name="Bold" isDefault="false" fontName="DejaVu Sans" size="14" isBold="true" isItalic="false" isUnderline="false" isStrikeThrough="false" pdfFontName="Helvetica-Bold" pdfEncoding="Cp1252" isPdfEmbedded="false"/>
+	<parameter name="who" isForPrompting="true" class="java.lang.String">
+		<parameterDescription><![CDATA[Name to greet]]></parameterDescription>
+		<defaultValueExpression><![CDATA["DTD"]]></defaultValueExpression>
+	</parameter>
+	<variable name="pages" class="java.lang.Integer" resetType="Report" calculation="Nothing">
+		<variableExpression><![CDATA[$V{PAGE_NUMBER}]]></variableExpression>
+	</variable>
+	<title>
+		<band height="70" isSplitAllowed="true">
+			<staticText>
+				<reportElement x="0" y="0" width="200" height="24" key="staticText-1" positionType="Float" stretchType="RelativeToBandHeight" isPrintRepeatedValues="true" mode="Opaque" forecolor="#000000" backcolor="#FFFF00"/>
+				<box leftBorder="Thin" leftBorderColor="#000000" rightBorder="1Point" rightBorderColor="#FF0000" topBorder="Dotted" topBorderColor="#00FF00" bottomBorder="2Point" bottomBorderColor="#0000FF" padding="2"/>
+				<textElement textAlignment="Center" verticalAlignment="Middle" rotation="None" isStyledText="true" lineSpacing="1_1_2">
+					<font reportFont="Bold"/>
+				</textElement>
+				<text><![CDATA[<b>DTD</b> era]]></text>
+			</staticText>
+			<textField isStretchWithOverflow="true" pattern="" isBlankWhenNull="true" evaluationTime="Now" hyperlinkType="None" hyperlinkTarget="Self" bookmarkLevel="0">
+				<reportElement x="210" y="0" width="250" height="24" key="textField-1"/>
+				<box border="Thin" borderColor="#808080" topPadding="1" leftPadding="2" bottomPadding="3" rightPadding="4"/>
+				<textElement textAlignment="Left" verticalAlignment="Top">
+					<font reportFont="Normal" fontName="DejaVu Serif" size="11" isBold="true"/>
+				</textElement>
+				<textFieldExpression class="java.lang.String"><![CDATA["Hello " + $P{who}]]></textFieldExpression>
+			</textField>
+			<rectangle radius="4">
+				<reportElement x="0" y="30" width="80" height="30" backcolor="#CCCCCC" mode="Opaque" positionType="FixRelativeToBottom"/>
+				<graphicElement pen="Thin" fill="Solid" stretchType="RelativeToTallestObject"/>
+			</rectangle>
+			<line direction="TopDown">
+				<reportElement x="90" y="30" width="80" height="30"/>
+				<graphicElement pen="4Point"/>
+			</line>
+			<ellipse>
+				<reportElement x="180" y="30" width="80" height="30"/>
+				<graphicElement pen="Dotted"/>
+			</ellipse>
+			<image scaleImage="Clip" hAlign="Right" vAlign="Bottom" isUsingCache="true" isLazy="true" onErrorType="Blank">
+				<reportElement x="270" y="30" width="40" height="30"/>
+				<box topBorder="None" topBorderColor="#000000"/>
+				<graphicElement pen="None"/>
+				<imageExpression class="java.lang.String"><![CDATA["missing.png"]]></imageExpression>
+			</image>
+		</band>
+	</title>
+	<detail>
+		<band height="0" isSplitAllowed="false"/>
+	</detail>
+	<summary>
+		<band height="30">
+			<textField evaluationTime="Report">
+				<reportElement x="0" y="0" width="300" height="24"/>
+				<textElement/>
+				<textFieldExpression class="java.lang.String"><![CDATA["Pages: " + $V{pages}]]></textFieldExpression>
+			</textField>
+		</band>
+	</summary>
+</jasperReport>

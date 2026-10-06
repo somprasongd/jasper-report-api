@@ -73,9 +73,11 @@ Base path คือ `/api`
 
 | Method | Path | หน้าที่ | ต้องใช้ API key |
 |---|---|---|---|
-| POST | `/api/v1/reports/render` | สร้าง PDF | ใช่ |
+| POST | `/api/v1/reports/render` | สร้าง PDF (หรือ `xlsx` / `csv` ด้วย `format`) | ใช่ |
 | POST | `/api/v1/jasper/generate` | เหมือน `render` (alias ให้ client ของ `jasperreports-pdf`) | ใช่ |
+| POST | `/api/v1/reports/convert` | แปลง JRXML ของ JasperReports 6.x เป็นรูปแบบ 7 พร้อมรายการสิ่งที่ต้องตรวจ ดู [แปลง JRXML 6.x → 7](#แปลง-jrxml-6x--7) | ใช่ |
 | POST | `/api/v1/reports/validate` | compile รายงานแล้วบอกว่า API เห็นอะไร (parameter, datasource, ฟอนต์, คำเตือน) โดยไม่รัน query | ใช่ |
+| GET | `/api/v1/openapi.yaml` | สัญญา API แบบ OpenAPI 3.1 (ใช้ generate client หรือเปิดใน Swagger UI/Postman) ดู [OpenAPI](#openapi) | ไม่ |
 | GET | `/api/healthz` | liveness แบบเดิม | ไม่ |
 | GET | `/api/actuator/health/liveness`, `/readiness` | ตรวจสุขภาพ (readiness ตรวจ DB ทุกตัวและ S3) | ไม่ |
 | GET | `/api/actuator/prometheus` | metrics | ใช่ (`X-API-Key` หรือ `Authorization: Bearer <key>`) |
@@ -110,15 +112,15 @@ Base path คือ `/api`
 | `subReports[]` | ไม่ | `{"name": "sub_x", "url": "..."}` — **รายงาน http(s) ต้องระบุ subreport ทุกตัวที่ใช้** (ดาวน์โหลดมาเก็บเป็น `sub_x.jrxml` ในชุดเดียวกับรายงานหลัก) ส่วนโฟลเดอร์/S3 ไม่ต้องส่ง (มีอยู่ในโฟลเดอร์แล้ว) ยกเว้นแบบ `SUBREPORT_DIR` ที่ใช้เลือก subreport ที่จะ compile (ไม่ระบุ = ทุก `*.jrxml` ในโฟลเดอร์) |
 | `parameters[].name` / `value` | ใช่ | ค่า parameter ดู [ชนิดของ parameter](#ชนิดของ-parameter) |
 | `parameters[].type` | ไม่ | ใช้เฉพาะเมื่อ JRXML ประกาศชนิดกว้างๆ (`Object`, `Collection`) |
-| `format` | ไม่ | `pdf` (ค่าเริ่มต้น; ตอนนี้รองรับเฉพาะ `pdf`) |
-| `fileName` | ไม่ | ชื่อไฟล์ใน `Content-Disposition` (ภาษาไทยได้) |
+| `format` | ไม่ | `pdf` (ค่าเริ่มต้น), `xlsx` หรือ `csv` (ไม่สนตัวพิมพ์เล็ก/ใหญ่) ดู [รูปแบบไฟล์ผลลัพธ์](#รูปแบบไฟล์ผลลัพธ์-pdf--xlsx--csv) |
+| `fileName` | ไม่ | ชื่อไฟล์ใน `Content-Disposition` (ภาษาไทยได้) ถ้ายังไม่มีนามสกุลของ `format` จะต่อให้ |
 | `locale` | ไม่ | ภาษาของรายงาน เช่น `th`, `en`, `en-US` — **ชนะค่าที่รายงานกำหนดไว้เอง** ดู [หลายภาษา](#หลายภาษา-i18n) |
 
 Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (ไม่บังคับ), `X-Request-Id` (ไม่บังคับ; ไม่ส่งจะสร้างให้ และส่งกลับ + อยู่ใน log ทุกบรรทัดของ request)
 
 ### Response
 
-- สำเร็จ `200`, `Content-Type: application/pdf`, `Content-Disposition: inline; filename*=UTF-8''...`, `X-Report-Version` (เวอร์ชันของโฟลเดอร์รายงานที่ใช้จริง), `Content-Language` (ภาษาที่ใช้จริง เช่น `th`), `X-Request-Id`
+- สำเร็จ `200`, `Content-Type` ตาม `format` (`application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` หรือ `text/csv; charset=UTF-8`), `Content-Disposition: inline; filename*=UTF-8''...` (PDF เปิดในเบราว์เซอร์; `xlsx`/`csv` เป็น `attachment`), `X-Report-Version` (เวอร์ชันของโฟลเดอร์รายงานที่ใช้จริง), `Content-Language` (ภาษาที่ใช้จริง เช่น `th`), `X-Request-Id`
 - ผิดพลาด `application/problem+json`:
 
 ```json
@@ -139,7 +141,7 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `DATA_TOO_LARGE` | 413 | `data` เกิน `report.limits.max-data-size` |
 | `SOURCE_NOT_ALLOWED` | 400 | path/bucket/host/scheme ไม่ได้รับอนุญาต หรือพยายามออกนอกโฟลเดอร์ |
 | `PARAMETER_INVALID` | 400 | แปลงค่า parameter ไม่ได้ (ระบุชื่อ parameter) |
-| `FORMAT_UNSUPPORTED` | 400 | `format` ที่ยังไม่รองรับ |
+| `FORMAT_UNSUPPORTED` | 400 | `format` ที่ไม่ใช่ `pdf`, `xlsx`, `csv` |
 | `LOCALE_INVALID` | 400 (ใน request) / 422 (ใน JRXML) | `locale` ไม่ใช่ language tag เช่น `th`, `en-US` |
 | `REPORT_NOT_FOUND` | 404 | หาไฟล์/bucket ไม่เจอ |
 | `REPORT_COMPILE_FAILED` | 422 | JRXML compile ไม่ผ่าน (รวมถึงเป็นรูปแบบ 6.x) |
@@ -149,6 +151,9 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `QUERY_TIMEOUT` | 504 | query ใน DB นานเกิน `query-timeout` |
 | `DATABASE_ERROR` | 502 | DB ต่อไม่ได้หรือ SQL ผิด |
 | `STORAGE_ERROR` | 502 | อ่าน S3/host ปลายทางไม่ได้ |
+| `CONVERT_FAILED` | 400 | `/convert`: ไม่ใช่ XML, มี DOCTYPE/entity ภายนอก หรือซ้อนลึกเกินไป |
+| `JRXML_TOO_LARGE` | 413 | `/convert`: `jrxml` ใหญ่เกิน `report.sources.max-bytes` |
+| `DATASOURCE_MISCONFIGURED` | 500 | datasource ที่เรียกใช้ตั้งค่าไม่ครบ (เช่นไม่มี `url`) |
 | `INTERNAL_ERROR` | 500 | อื่นๆ (เช่น รูปที่รายงานอ้างไม่มีไฟล์) |
 
 ### ชนิดของ parameter
@@ -170,6 +175,40 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 - `SUBREPORTS`, `SUBREPORT_DIR`, `IMAGE_DIR`, `REPORT_ASSETS_DIR`, `REPORT_LANGUAGE`, `REPORT_LOCALE`, `REPORT_CONNECTION`, `REPORT_TIME_ZONE`, ... เป็นของ API — ค่าที่ client ส่งมาถูกตัดทิ้ง
 - ค่าที่แปลงไม่ได้ → `400 PARAMETER_INVALID` ระบุชื่อ parameter (ไม่ส่งค่า `null` เงียบๆ แบบเดิม)
 - API ตั้ง time zone ของ JVM เป็น `report.timezone` (`Asia/Bangkok`) เพื่อไม่ให้ผลขึ้นกับเครื่อง/container และตั้ง `REPORT_LOCALE` ให้ทุกรายงานตามที่เลือกไว้ใน [หลายภาษา](#หลายภาษา-i18n)
+
+### รูปแบบไฟล์ผลลัพธ์ (pdf / xlsx / csv)
+
+| `format` | `Content-Type` | หมายเหตุ |
+|---|---|---|
+| `pdf` (ค่าเริ่มต้น) | `application/pdf` | เปิดในเบราว์เซอร์ (`inline`) ฝังฟอนต์ไทย |
+| `xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | ดาวน์โหลด (`attachment`) ข้อความเป็นเซลล์จริง (ตรวจชนิดข้อมูลให้) ทั้งรายงานอยู่ในชีตเดียวต่อเนื่อง ไม่ตัดตามหน้า |
+| `csv` | `text/csv; charset=UTF-8` | ดาวน์โหลด คั่นด้วย `,` จบบรรทัดด้วย `CRLF` ขึ้นต้นด้วย UTF-8 BOM เพื่อให้ Excel อ่านภาษาไทยได้ (ปิดด้วย `report.export.csv-bom: false`) |
+
+- ใช้ JRXML ไฟล์เดียวกับ PDF และ query เดียวกัน — ตัวส่งออกแปลงสิ่งที่ fill ได้ (`JasperPrint`) เป็นไฟล์ จึง**จัดวางตามหน้ากระดาษของรายงาน** รายงานที่ตั้งใจให้เป็นตารางข้อมูลควรออกแบบให้ field เรียงเป็นคอลัมน์ ไม่ซ้อนทับกัน และตั้ง `ignorePagination="true"` ใน `<jasperReport>` เพื่อไม่ให้ page header/footer แทรกกลางชีต
+- แต่ละ element ยังอยู่ใต้กฎเดิม: `max-pages`, `fill-timeout`, ช่อง render และ virtualizer ใช้กับทุก format; รูป/QR/barcode ใส่ลง xlsx เป็นรูป ส่วน csv มีเฉพาะข้อความ
+- metric `report_render_seconds` มี tag `format` ให้แยกดูได้
+- `.xls` (Excel เก่า), `docx`, `html` ยังไม่รองรับ (ได้ `400 FORMAT_UNSUPPORTED`)
+
+### รายงานขนาดใหญ่ (virtualizer)
+
+ระหว่าง fill รายงานที่มีหลายร้อยหน้า JasperReports เก็บหน้าไว้ใน heap ทั้งหมดจน fill เสร็จ API จึงให้ทุก render ใช้ **swap-file virtualizer**: เก็บหน้าล่าสุดไว้ใน memory แค่ `report.virtualizer.max-pages-in-memory` หน้า (ค่าเริ่มต้น 100) ที่เหลือเขียนลงไฟล์ชั่วคราวแล้วอ่านกลับตอน export รายงานที่ไม่ถึงเกณฑ์นี้ไม่ถูกเขียนลงดิสก์เลย (สร้างไฟล์เปล่าไว้เท่านั้น)
+
+- ไฟล์อยู่ที่ `report.virtualizer.directory` (ค่าเริ่มต้น `<report.cache.work-dir>/swap`) ต้องเขียนได้ — ใน container คือโฟลเดอร์ใน volume `report-cache` เหมือน cache อื่น
+- ไฟล์ถูกลบเมื่อ render จบ ไม่ว่าสำเร็จหรือล้มเหลว (timeout, เกิน `max-pages` ฯลฯ) ไฟล์ที่ค้างจาก process ที่ล้มกลางคัน (`swap_*` เก่ากว่า 1 ชั่วโมง) ถูกลบตอนเริ่มระบบ
+- ถ้าสร้างไฟล์ไม่ได้ (โฟลเดอร์เขียนไม่ได้) API log WARN แล้ว render ต่อโดยไม่ใช้ virtualizer แทนที่จะล้ม
+- ปิดได้ด้วย `report.virtualizer.enabled: false`
+- virtualizer ลดการใช้ heap ระหว่าง **fill** เท่านั้น ผลลัพธ์สุดท้ายยังถูกประกอบใน memory ก่อนตอบ (sync) จึงยังควรจำกัดด้วย `max-pages`
+
+### OpenAPI
+
+สัญญาของ API อยู่ที่ [src/main/resources/openapi/openapi.yaml](src/main/resources/openapi/openapi.yaml) (OpenAPI 3.1) และเปิดจาก API เองได้ที่ `GET /api/v1/openapi.yaml` โดยไม่ต้องมี API key — ครอบคลุม request/response ของทุก endpoint, รูปแบบ error (`application/problem+json`) พร้อมรายการ `code` ทั้งหมด, และ response ทั้งสามชนิดของ `render`
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/openapi.yaml -o openapi.yaml
+npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g typescript-fetch -o client/   # ตัวอย่าง: generate client
+```
+
+ไฟล์นี้เขียนด้วยมือ (ไม่ generate จาก annotation) เพื่ออธิบายสิ่งที่ annotation บอกไม่ได้ เช่น `code` ของ error และ media type ของแต่ละ format — เทสต์ `OpenApiContractTest` จึงตรวจให้ตรงกับโค้ดเสมอ: route ทุกตัวต้องมีในสัญญาและกลับกัน, ฟิลด์ของ request ตรงกับ `RenderRequest`, `format` ตรงกับ `OutputFormat`, และรายการ `ErrorCode` ตรงกับ code ที่โค้ดโยนได้ ถ้าแก้ API ต้องแก้ไฟล์นี้ด้วยไม่เช่นนั้นเทสต์ล้ม
 
 ### `POST /api/v1/reports/validate`
 
@@ -449,7 +488,7 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 - ค่าวันที่/ตัวเลขใน JSON มาเป็นสตริงได้ ตั้งรูปแบบด้วย property ข้างบน (ระดับรายงาน) มิฉะนั้นแปลงชนิดไม่ตรง
 - ขนาดสูงสุดตั้งด้วย `report.limits.max-data-size` (ค่าเริ่มต้น `10MB`) และเนื้อ JSON **ไม่ถูก log** เช่นเดียวกับ parameter
 - parameter `JSON_INPUT_STREAM` / `JSON_SOURCE` เป็นของ API: client ส่งมาเองไม่ได้ จึงชี้ query ไปที่ไฟล์หรือ URL ของ server ไม่ได้
-- subreport ที่ใช้ข้อมูลชุดเดียวกันให้ส่งต่อจากรายงานหลักด้วย `((net.sf.jasperreports.json.data.JsonDataSource)$P{REPORT_DATA_SOURCE}).subDataSource("เส้นทาง")` (ยังไม่มีเทสต์ครอบคลุมกรณี subreport)
+- subreport ที่ใช้ข้อมูลชุดเดียวกันให้ส่งต่อจากรายงานหลักด้วย `((net.sf.jasperreports.json.data.JsonDataSource)$P{REPORT_DATA_SOURCE}).subDataSource("เส้นทาง")` (มีเทสต์ครอบคลุม: `JsonSubreportTest` ใช้ `data` ที่มี array ซ้อน — ตัวอย่างอยู่ที่ `src/test/resources/reports/modes/json_master.jrxml` + `sub_json_visits.jrxml`)
 - `POST /api/v1/reports/validate` รับ `data` เหมือนกัน และจะรายงาน `datasource.resolved` เป็น `json` หรือ `none`
 
 ### เพิ่ม DB ใหม่ / DB ชนิดอื่น
@@ -520,7 +559,29 @@ Driver ที่อยู่ในส่วน `<dependencies>` ของ [pom.x
 
 ### ต้องเป็น JRXML ของ JasperReports 7
 
-รูปแบบใหม่ (ไม่มี namespace, ใช้ `<element kind="...">`) — เปิดไฟล์เก่าใน **Jaspersoft Studio 7** แล้วบันทึกใหม่เพื่อแปลง ถ้าส่งไฟล์รูปแบบ 6.x มา API ตอบ `422 REPORT_COMPILE_FAILED` พร้อมคำแนะนำนี้ (ทดสอบแล้ว: `medical_certificate.jrxml` ของ `jasperreports-generater` อ่านด้วย 7.0.8 ไม่ได้) ตัวอย่างที่ใช้ได้อยู่ใน [samples/reports/demo/](samples/reports/demo/)
+รูปแบบใหม่ (ไม่มี namespace, ใช้ `<element kind="...">`) — แปลงไฟล์เก่าด้วย [`/convert`](#แปลง-jrxml-6x--7) หรือเปิดใน **Jaspersoft Studio 7** แล้วบันทึกใหม่ ถ้าส่งไฟล์รูปแบบ 6.x มา API ตอบ `422 REPORT_COMPILE_FAILED` พร้อมคำแนะนำนี้ (ทดสอบแล้ว: `medical_certificate.jrxml` ของ `jasperreports-generater` อ่านด้วย 7.0.8 ไม่ได้) ตัวอย่างที่ใช้ได้อยู่ใน [samples/reports/demo/](samples/reports/demo/)
+
+### แปลง JRXML 6.x → 7
+
+`POST /api/v1/reports/convert` แปลง JRXML ของ JasperReports 6.x (รวมรูปแบบเก่ามากที่มี `<!DOCTYPE ...>`) เป็นรูปแบบ 7 โดยไม่ต้องเปิดทีละไฟล์ใน Jaspersoft Studio ใช้ **ครั้งเดียวตอนนำเข้ารายงาน** ไม่ใช่ทุกครั้งที่ render (ไม่กินช่อง render และไม่เก็บอะไรไว้)
+
+```bash
+curl -s -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d "$(jq -Rs '{jrxml: .}' medical_certificate.jrxml)" http://127.0.0.1:8080/api/v1/reports/convert
+# → { "jrxml": "<?xml ...", "alreadyCurrent": false, "warnings": [ "title/band/pieChart[1]: ..." ] }
+
+# หรือใช้สคริปต์ (เขียนผลเป็น medical_certificate.v7.jrxml และพิมพ์ warning ทาง stderr; ต้องมี jq)
+API_KEY=$KEY scripts/jrxml-upgrade.sh medical_certificate.jrxml
+```
+
+- ไฟล์ที่เป็นรูปแบบ 7 อยู่แล้วถูกส่งคืนตามเดิม (`alreadyCurrent: true`)
+- นิพจน์ (`CDATA`), `uuid` และ comment คงเดิมทุกตัวอักษร; แปลงชื่อ/ค่าของ attribute ที่เปลี่ยนใน 7 ให้ เช่น `isBold` → `bold`, `isStretchWithOverflow="true"` → `textAdjust="StretchHeight"`, ขอบแบบเก่า → pen, ทิศทาง barcode `0/90/180/270` → `up/left/down/right`
+- **ส่วนที่แปลงให้ไม่ได้จะไม่ถูกทิ้งเงียบๆ** — อยู่ใน `warnings` พร้อมตำแหน่ง (เช่น `title/band/pieChart[1]: ...`) และ element นั้นถูกแทนด้วย `<!-- not converted: ... -->` ในผลลัพธ์ ได้แก่ chart (API นี้ไม่มี `jasperreports-charts`), `map`, `sort`, `spiderChart`, `iconLabel`, report part, barbecue (แปลงเป็น `kind="barbecue"` แต่ต้องเพิ่ม jar ของ barbecue เอง), query language ที่ JR 7 โหลดไม่ได้ (เช่น `plsql`)
+- คลาสของ JasperReports ที่ย้ายที่หรือไม่มีใน 7 และถูกอ้างใน expression/import (เช่น `net.sf.jasperreports.engine.data.JsonDataSource` → `net.sf.jasperreports.json.data.JsonDataSource`) จะถูก **เตือนแต่ไม่ถูกแก้ให้** เพราะ expression คือโค้ดของคุณ
+- **ขนาดตัวอักษรใน `<reportFont>`:** JR 6.17–6.21 ไม่อ่านค่า `size` ของ `reportFont` ข้อความเหล่านั้นจึงออกเป็น 10pt จริงๆ ตัวแปลงแปลง `reportFont` เป็น style และทิ้ง size เพื่อให้ผลตรงกับที่เคยเห็นใน 6.x แล้วเตือนไว้ ถ้าต้องการขนาดที่ประกาศไว้ ให้ตั้งใน style เอง
+- ถ้าผลลัพธ์ยังโหลดใน JasperReports 7 ไม่ได้ จะมี warning บอกท้ายรายการ
+- ความปลอดภัย: ปฏิเสธ DOCTYPE/entity ภายนอก (กัน XXE) และ XML ที่ซ้อนลึกเกิน 200 ชั้น; ขนาดจำกัดด้วย `report.sources.max-bytes`; ข้อความ error ไม่สะท้อนเนื้อไฟล์
+- หลังแปลงควรเปิดผลใน Studio 7 หรือยิง [`/validate`](#post-apiv1reportsvalidate) แล้ว render เทียบกับของเดิมก่อนใช้งานจริง และ **ห้ามนำผลไป compile ด้วย JR 6**
 
 ### ฟอนต์ไทย
 
@@ -681,6 +742,10 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 | `report.limits.query-timeout` | `30s` | เวลา query สูงสุดต่อ statement (JDBC query timeout ทุก driver; `0` = ไม่จำกัด) |
 | `report.limits.max-pages` | `500` | จำนวนหน้าสูงสุด |
 | `report.limits.max-data-size` | `10MB` | ขนาดสูงสุดของ `data` (JSON) ใน request ตรวจหลังแปลง JSON แล้ว |
+| `report.export.csv-bom` | `true` | ใส่ UTF-8 BOM หน้าไฟล์ CSV (Excel ต้องใช้เพื่ออ่านภาษาไทย) |
+| `report.virtualizer.enabled` | `true` | เก็บหน้าของรายงานใหญ่ไว้ในไฟล์ชั่วคราวระหว่าง fill ดู [รายงานขนาดใหญ่](#รายงานขนาดใหญ่-virtualizer) |
+| `report.virtualizer.max-pages-in-memory` | `100` | จำนวนหน้าที่เก็บใน heap ต่อ render ก่อนเขียนลงไฟล์ |
+| `report.virtualizer.directory` | ว่าง | โฟลเดอร์ไฟล์ชั่วคราว (ว่าง = `swap` ใต้ `report.cache.work-dir`) |
 | `report.sources.max-bytes` | `5MB` | ขนาดสูงสุดของแต่ละไฟล์ที่ดึงผ่าน http(s) |
 | `report.sources.http.timeout` | `10s` | timeout ต่อการดาวน์โหลดหนึ่งครั้ง |
 | `report.sources.http.parallelism` | `8` | จำนวนดาวน์โหลด http(s) ที่ยิงพร้อมกันทั้งระบบ |
@@ -695,7 +760,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 - **Metrics** (`/api/actuator/prometheus`): `report_render_seconds{tenant,report,datasource,format,outcome}`, `report_compile_seconds`, `report_cache_requests_total{result}`, `report_inflight`, `report_requests_total{client}`, `report_requests_rejected_total{code}`, `report_datasource_override_total{...}`, `report_source_stale_total{source}` (ใช้ของเก่าเพราะต้นทางล่ม), และ metric ของ JVM/HikariCP
 - **Log:** มี `requestId` และ `clientId` ใน MDC; ไม่บันทึกค่า parameter (อาจเป็นข้อมูลผู้ป่วย) ใช้ log format แบบ structured ได้ด้วย `LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash`
 - **Readiness** `UP` ต่อเมื่อทุก datasource ที่ตั้งค่าไว้ต่อได้ และ (ถ้าเปิด S3) bucket แรกใน `S3_ALLOWED_BUCKETS` มีอยู่และเข้าถึงได้
-- **ข้อจำกัด:** ตอนนี้ผลลัพธ์ถูกสร้างใน memory แล้วส่งกลับทั้งก้อน (sync); รายงานหลายพันหน้าควรจำกัดด้วย `max-pages` ยังไม่มี async job, `xlsx`/`csv`, และ tenant ที่มี root/bucket ของตัวเอง (ดู phase 2 ในเอกสารออกแบบ)
+- **ข้อจำกัด:** ผลลัพธ์ถูกประกอบใน memory แล้วส่งกลับทั้งก้อน (sync) แม้ระหว่าง fill จะใช้ [virtualizer](#รายงานขนาดใหญ่-virtualizer) รายงานหลายพันหน้าจึงควรจำกัดด้วย `max-pages` ยังไม่มี async job และ tenant ที่มี root/bucket ของตัวเอง (ดู phase 2 ในเอกสารออกแบบ)
 - container รันด้วย user `10001`, `TZ=Asia/Bangkok`, healthcheck ที่ `/api/healthz`
 
 ---
@@ -705,7 +770,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 98 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # กว่า 180 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

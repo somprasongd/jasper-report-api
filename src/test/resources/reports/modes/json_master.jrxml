@@ -1,0 +1,19 @@
+<jasperReport name="json_master" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0101">
+	<parameter name="SUBREPORTS" class="java.util.Map"/>
+	<query language="json"><![CDATA[patients]]></query>
+	<field name="name" class="java.lang.String">
+		<property name="net.sf.jasperreports.json.field.expression" value="name"/>
+	</field>
+	<detail>
+		<band height="90">
+			<element kind="textField" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0102" x="0" y="0" width="555" height="30" fontName="TH Sarabun New" fontSize="18" bold="true">
+				<expression><![CDATA["ผู้ป่วย: " + $F{name}]]></expression>
+			</element>
+			<!-- the sub-report reads the visits array of the patient being printed, from the same request JSON -->
+			<element kind="subreport" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0103" x="20" y="34" width="535" height="50">
+				<dataSourceExpression><![CDATA[((net.sf.jasperreports.json.data.JsonDataSource)$P{REPORT_DATA_SOURCE}).subDataSource("visits")]]></dataSourceExpression>
+				<expression><![CDATA[$P{SUBREPORTS}.get("sub_json_visits")]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

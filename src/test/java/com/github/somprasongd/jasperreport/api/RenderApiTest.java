@@ -212,7 +212,7 @@ class RenderApiTest {
         mvc.perform(render("{\"mainReport\":{\"url\":\"demo/missing.jrxml\"}}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("REPORT_NOT_FOUND"));
-        mvc.perform(render(demoRequest("").replace("\"parameters\"", "\"format\":\"xlsx\",\"parameters\"")))
+        mvc.perform(render(demoRequest("").replace("\"parameters\"", "\"format\":\"docx\",\"parameters\"")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("FORMAT_UNSUPPORTED"));
         mvc.perform(render(demoRequest("").replace("\"parameters\"", "\"tenant\":\"nobody\",\"parameters\"")))
