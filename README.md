@@ -198,7 +198,7 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 |---|---|---|
 | ไม่มี scheme | `opd/cert/main.jrxml`, `test.jrxml` | `report.sources.local.root` (ใน container คือ `/app/reports`) ห้าม path แบบ absolute, `..` หรือ symlink ที่ออกนอก root |
 | `s3://` | `s3://reports/opd/cert/main.jrxml` | S3-compatible storage ด้วย credential ของ server เฉพาะ bucket ใน `S3_ALLOWED_BUCKETS` |
-| `http://`, `https://` | `https://files.internal/a.jrxml` | **ปิดอยู่เป็นค่าเริ่มต้น** เปิดเฉพาะ host ใน `HTTP_ALLOWED_HOSTS` (ทุก URL รวม subreport ต้องอยู่ใน allowlist); ไม่ตาม redirect; จำกัดขนาดและเวลา; ดู [รายงานผ่าน http(s)](#รายงานผ่าน-https) |
+| `http://`, `https://` | `https://files.internal/a.jrxml` | **ปิดอยู่เป็นค่าเริ่มต้น** เปิดเฉพาะ host ใน `HTTP_ALLOWED_HOSTS` (`host`, `host:port` หรือ `*.domain`; ทุก URL รวม subreport ต้องอยู่ใน allowlist); ไม่ตาม redirect; จำกัดขนาดและเวลา; ดู [รายงานผ่าน http(s)](#รายงานผ่าน-https) |
 
 > JRXML เป็น **โค้ดที่ถูกรัน** (expression เป็น Groovy/Java) — ให้เฉพาะคนที่เชื่อถือได้เขียนลง folder/bucket ของรายงานได้
 
@@ -325,6 +325,31 @@ URL บอกได้แค่ "ไฟล์เดียว" ไม่มีโ
 | subreport | **ต้องระบุทุกตัว** ใน `subReports[]` ด้วย `name` + `url` (URL ต่างกันได้ แต่ host ต้องอยู่ใน allowlist) แล้ว `$P{SUBREPORTS}.get("sub_x")` หรือ `$P{SUBREPORT_DIR} + "sub_x.jasper"` ก็ใช้ได้ตามปกติ ถ้าไม่ระบุ จะได้ `404 REPORT_NOT_FOUND` พร้อมคำแนะนำ |
 | message bundle | ดาวน์โหลด **อัตโนมัติ** จากที่เดียวกับไฟล์ JRXML: ถ้า JRXML ประกาศ `resourceBundle="messages"` จะขอ `messages.properties` และ `messages_<ภาษา>.properties` ของภาษาที่น่าจะถูกเลือก (`locale` ใน request, `report.locale` ในไฟล์/config) เช่น `th_TH` และ `th` ทำแยกให้ทุกไฟล์ รวม subreport (bundle ของ subreport อยู่ข้าง URL ของ subreport) ไฟล์ที่ไม่มี (404/403) ข้ามไปได้ |
 | รูปภาพ | ไม่มี `assets/` ให้ ใส่เป็น **URL เต็ม** ใน expression ของรูป เช่น `"https://files.internal/logo.png"` — JasperReports ดึงเอง (ไม่ผ่าน allowlist ของ API เพราะ JRXML คือโค้ดที่เชื่อถืออยู่แล้ว) |
+
+#### allowlist ของ host
+
+`HTTP_ALLOWED_HOSTS` (`report.sources.http.allowed-hosts`) เทียบกับ **ชื่อ host ใน URL** (ไม่สนตัวพิมพ์เล็ก/ใหญ่) ไม่ได้ resolve เป็น IP จึงใช้ชื่อ service ของ docker compose หรือ Kubernetes ได้ IP ของ container/pod เปลี่ยนก็ไม่ต้องแก้
+
+| รูปแบบ | ตัวอย่าง | ผ่าน | ไม่ผ่าน |
+|---|---|---|---|
+| `host` | `report-files` | `http://report-files/...`, `http://report-files:8080/...` (ทุก port) | `http://x.report-files/...` |
+| `host:port` | `report-files:8080` | `http://report-files:8080/...` | `http://report-files/...` (= port 80), port อื่น |
+| `*.domain` | `*.reports.svc.cluster.local` | `http://files.reports.svc.cluster.local/...` (sub-domain กี่ชั้นก็ได้) | `http://reports.svc.cluster.local/...` (ตัว domain เอง) |
+| `*.domain:port` | `*.svc.cluster.local:8080` | sub-domain ใดก็ได้ที่ port 8080 | port อื่น |
+| IPv6 | `[::1]:8080` | `http://[::1]:8080/...` | — |
+
+```bash
+# docker compose: ชื่อ service
+HTTP_ALLOWED_HOSTS=report-files:8080
+# Kubernetes: ชื่อ Service ทั้งแบบสั้นและ FQDN (client ใช้แบบไหนต้องมีแบบนั้น) หรือ wildcard ของ namespace
+HTTP_ALLOWED_HOSTS=report-files,*.reports.svc.cluster.local
+```
+
+- URL ที่ไม่ระบุ port ใช้ 80 (http) หรือ 443 (https) ในการเทียบกับ `host:port`
+- ระบุ port เมื่อเครื่องเดียวกันมี service อื่นที่ไม่ควรถูกเรียก (`host` เฉยๆ เปิดทุก port)
+- ห้ามใช้ `*` เดี่ยวๆ หรือ wildcard กลางชื่อ ค่าที่ผิดรูปแบบทำให้ API **start ไม่ขึ้น** พร้อมบอกค่าที่ผิด
+- ชื่อ host ที่มี `_` (เช่นชื่อ service `report_files`) ใช้ใน URL ไม่ได้ ตั้งชื่อ service/alias ด้วย `-` แทน
+- ไม่ได้บล็อก IP ภายใน: allowlist คือด่านหลัก ใส่เฉพาะ host ที่ควบคุมไฟล์เองได้ (ใครเขียนไฟล์บน host นั้นได้ = รันโค้ดบน API ได้) ถ้าต้องการกันมากกว่านี้ให้จำกัด egress ของ container ด้วย firewall/NetworkPolicy
 
 ข้อควรรู้:
 - **ตรวจ/ดาวน์โหลดใหม่ทุก `report.cache.check-interval`** (ค่าเริ่มต้น 10 วินาที) เมื่อมี request เข้ามาหลังหมดอายุ (ไม่มีตัวทำงานเบื้องหลัง) ไฟล์ทั้งชุดถูกดาวน์โหลดใหม่ **พร้อมกัน** (JRXML หลัก + subreport ในรอบแรก แล้ว `.properties` ทุกไฟล์ที่เป็นไปได้ในรอบที่สอง) จำกัดจำนวนที่ยิงพร้อมกันทั้งระบบด้วย `report.sources.http.parallelism` (ค่าเริ่มต้น 8) เวลาต่อรอบจึงใกล้เคียงไฟล์ที่ช้าที่สุดสองรอบ ไม่ใช่ผลรวมของทุกไฟล์; เนื้อหาไม่เปลี่ยน = เวอร์ชันเท่าเดิม = ไม่ compile ใหม่; แก้ไฟล์ที่ต้นทางแล้วมีผลเองภายในเวลานี้
@@ -637,7 +662,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 | `REPORT_CACHE_DIR` | `cache` | ที่เก็บ `.jasper` ของ subreport แบบ `SUBREPORT_DIR` และโฟลเดอร์ที่ซิงก์จาก S3 (compose ใช้ volume `report-cache`) |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | — / `us-east-1` | S3-compatible storage (ใช้ path-style access); เปิดใช้เมื่อตั้งทั้ง `S3_ENDPOINT` และ `S3_ALLOWED_BUCKETS` |
 | `S3_ALLOWED_BUCKETS` | — | bucket ที่อ่านได้ (คั่นด้วย `,`) |
-| `HTTP_ALLOWED_HOSTS` | — | host ที่ดึง JRXML ผ่าน http(s) ได้ (คั่นด้วย `,`) |
+| `HTTP_ALLOWED_HOSTS` | — | host ที่ดึง JRXML ผ่าน http(s) ได้ (คั่นด้วย `,`): `host` (ทุก port), `host:port`, `*.domain` ดู [allowlist ของ host](#allowlist-ของ-host) |
 | `API_BIND`, `API_PORT` | `127.0.0.1`, `8080` | (compose) address/port ที่เปิดบน host |
 | `JAVA_OPTS` | `-XX:MaxRAMPercentage=75` | JVM options |
 
@@ -680,7 +705,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 73 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # 98 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

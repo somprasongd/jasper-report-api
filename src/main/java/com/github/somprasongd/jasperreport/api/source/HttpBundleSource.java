@@ -49,6 +49,7 @@ class HttpBundleSource {
     private static final Pattern REPORT_LOCALE = Pattern.compile("<property\\s+name=\"report\\.locale\"\\s+value=\"([^\"]+)\"");
 
     private final ReportProperties.Http settings;
+    private final HostAllowList allowedHosts;
     private final long maxBytes;
     private final Path workDir;
     private final int keepVersions;
@@ -58,6 +59,7 @@ class HttpBundleSource {
 
     HttpBundleSource(ReportProperties.Http settings, long maxBytes, Path workDir, int keepVersions) {
         this.settings = settings;
+        this.allowedHosts = new HostAllowList(settings.allowedHosts());
         this.maxBytes = maxBytes;
         this.workDir = workDir.resolve("http");
         this.keepVersions = keepVersions;
@@ -233,10 +235,9 @@ class HttpBundleSource {
         if (!scheme.equals("http") && !scheme.equals("https")) {
             throw ApiException.badRequest("SOURCE_NOT_ALLOWED", "only http(s) URLs are accepted for sub-reports of an http(s) report");
         }
-        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
-        if (settings.allowedHosts().stream().noneMatch(h -> h.equalsIgnoreCase(host))) {
+        if (!allowedHosts.allows(uri)) {
             throw ApiException.badRequest("SOURCE_NOT_ALLOWED",
-                    "host '" + host + "' is not in report.sources.http.allowed-hosts");
+                    "host '" + HostAllowList.describe(uri) + "' is not in report.sources.http.allowed-hosts");
         }
         return uri;
     }

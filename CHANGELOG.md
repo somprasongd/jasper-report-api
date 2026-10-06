@@ -7,6 +7,12 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+### Added
+- `report.sources.http.allowed-hosts` (`HTTP_ALLOWED_HOSTS`) accepts `host:port` (only that port; a URL without a port means 80/443) and `*.domain` wildcards (every sub-domain at any depth, not the domain itself), for example `*.reports.svc.cluster.local`. A plain `host` still allows every port. A malformed entry now stops the API at startup.
+
+### Changed
+- `SOURCE_NOT_ALLOWED` for a host outside the allowlist names the host with its port (`host 'files.internal:443' ...`).
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

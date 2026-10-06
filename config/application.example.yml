@@ -24,7 +24,7 @@ report:
       secret-key: ${S3_SECRET_KEY}
       allowed-buckets: [reports]
     http:
-      allowed-hosts: []           # empty = http(s):// report URLs are refused
+      allowed-hosts: []           # empty = http(s):// report URLs are refused; entries: host, host:port, *.domain[:port]
   limits:
     max-concurrent-renders: 4
     queue-wait: 10s
