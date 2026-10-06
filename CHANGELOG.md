@@ -11,8 +11,9 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 - Render without a database: `datasource: "none"` (or no datasource at all for a report that has no `<query>`) fills with one empty record, so blank forms and parameter-only reports need no tenant or DB.
 - `data` field in render and validate requests: JSON read by a report's `<query language="json">` instead of a database. Limited by `report.limits.max-data-size` (default 10MB); not logged. New error codes `DATA_AND_DATASOURCE`, `DATA_NOT_SUPPORTED`, `DATA_TOO_LARGE` and `DATASOURCE_NONE_NOT_ALLOWED`.
 - `jasperreports-json` dependency.
-- MySQL, SQL Server and Oracle JDBC drivers on the class path (about 12 MB more in the jar); a datasource only needs its URL.
-- README: how to add or remove JDBC drivers in `pom.xml`, and the licence terms of the bundled drivers (Oracle FUTC requires a copy of the licence with every distribution).
+- MariaDB (also usable for MySQL, with a `jdbc:mariadb://` URL) and SQL Server JDBC drivers on the class path (about 2.3 MB more in the jar); a datasource only needs its URL. Oracle is not bundled: its licence (FUTC) is not open source and requires shipping a copy of the licence; the README shows how to add it.
+- README: how to add or remove JDBC drivers in `pom.xml` and the licences of the third-party components.
+- Apache License 2.0 (`LICENSE`, `NOTICE`) for the project itself.
 - `report.limits.query-timeout` now applies to every JDBC driver through `Statement.setQueryTimeout` (it used to be PostgreSQL only) and a query over the limit answers 504 `QUERY_TIMEOUT`.
 
 ### Changed

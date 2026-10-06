@@ -1,0 +1,11 @@
+jasper-report-api
+Copyright 2026 the jasper-report-api contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It depends on third-party software distributed under their own licences,
+including JasperReports (LGPL), MariaDB Connector/J (LGPL-2.1-or-later),
+the PostgreSQL JDBC driver (BSD-2-Clause), the Microsoft JDBC Driver for
+SQL Server (MIT), Spring Boot (Apache-2.0) and the TH Sarabun New font
+(GPL-2.0-or-later with a font-embedding exception). See README.md,
+section "สัญญาอนุญาต (License)".
