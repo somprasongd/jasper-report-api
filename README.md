@@ -452,10 +452,54 @@ JDBC driver ที่ติดมากับ jar แล้ว (เลือก�
 | Oracle | `jdbc:oracle:thin:@//host:1521/SERVICE_NAME` |
 
 - ใช้ user ที่มีสิทธิ์อ่านอย่างเดียว (`readOnly` เปิดเป็นค่าเริ่มต้น แต่การบังคับจริงขึ้นกับ driver จึงอย่าพึ่งแค่ค่านี้)
-- **query timeout:** `report.limits.query-timeout` ถูกส่งให้ JDBC (`Statement.setQueryTimeout`) กับทุก driver และทุก subreport ถ้าเกินจะตอบ 504 `QUERY_TIMEOUT` พร้อมยกเลิก query ใน DB (PostgreSQL มี `statement_timeout` ตั้งเพิ่มที่ connection อีกชั้น) มีเทสต์อัตโนมัติกับ H2 เท่านั้น ส่วน PostgreSQL, MySQL, SQL Server และ Oracle ยังไม่ได้ลองกับ DB จริง ควรทดสอบ query หนักๆ ก่อนใช้งาน
+- **query timeout:** `report.limits.query-timeout` ถูกส่งให้ JDBC (`Statement.setQueryTimeout`) กับทุก driver และทุก subreport ถ้าเกินจะตอบ 504 `QUERY_TIMEOUT` พร้อมยกเลิก query ใน DB (PostgreSQL มี `statement_timeout` ตั้งเพิ่มที่ connection อีกชั้น) มีเทสต์อัตโนมัติกับ H2 และ PostgreSQL จริง (`PostgresQueryTimeoutTest` ใช้ container) ส่วน MySQL, SQL Server และ Oracle ยังไม่ได้ลองกับ DB จริง ควรทดสอบ query หนักๆ ก่อนใช้งาน
 - **query ใน JRXML ต้องเป็น SQL ของ DB นั้น** รายงานที่เขียนไว้สำหรับ PostgreSQL ไม่ทำงานกับ DB อื่นเอง (เช่น `LIMIT`, `ILIKE`, ชื่อฟังก์ชันวันที่) ผูกรายงานกับ datasource ที่ถูกต้องด้วย `report.datasource` ใน JRXML
-- driver เพิ่มขนาด jar ราว 12 MB ถ้าไม่ใช้ DB ตัวไหนให้ลบ dependency นั้นออกจาก `pom.xml` ได้ ส่วน DB อื่นที่ไม่อยู่ในตาราง (เช่น MariaDB, DB2) ให้เพิ่ม JDBC driver ของมันใน `pom.xml` แล้ว build ใหม่ (Dockerfile build jar เองในตัว image)
-- driver ของ Oracle (`ojdbc11`) มีเงื่อนไขสิทธิ์การใช้ของ Oracle เอง ตรวจให้แน่ใจว่าเข้ากับการแจกจ่าย image ของคุณก่อน
+- **query ใน JRXML** ผูกรายงานกับ datasource ที่ถูกต้องด้วย `report.datasource` (ดู [การเลือก datasource](#การเลือก-datasource))
+
+#### เพิ่มหรือเอา JDBC driver ออกใน `pom.xml`
+
+Driver ของ PostgreSQL, MySQL, SQL Server และ Oracle อยู่ในส่วน `<dependencies>` ของ [pom.xml](pom.xml) แล้ว (ขนาด jar เพิ่มราว 12 MB ส่วนใหญ่มาจาก Oracle)
+
+**เอา driver ที่ไม่ใช้ออก** ลบ `<dependency>` ของมัน เช่นไม่ใช้ Oracle ลบบล็อกนี้ (ทำนองเดียวกันกับ `mysql-connector-j`, `mssql-jdbc`):
+
+```xml
+<dependency>
+    <groupId>com.oracle.database.jdbc</groupId>
+    <artifactId>ojdbc11</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+**เพิ่ม DB อื่น** เช่น MariaDB หรือ DB2 เพิ่ม `<dependency>` ต่อจากบล็อกของ driver เดิม โดยใส่ `<scope>runtime</scope>` เหมือนกัน:
+
+```xml
+<dependency>
+    <groupId>org.mariadb.jdbc</groupId>
+    <artifactId>mariadb-java-client</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+- `mariadb-java-client` และ DB2 (`com.ibm.db2:jcc`) Spring Boot BOM กำหนดเวอร์ชันให้ ไม่ต้องใส่ `<version>`; driver ที่ BOM ไม่รู้จักต้องใส่ `<version>` เอง และถ้าไม่ได้อยู่ใน Maven Central ต้องมี repository ให้ Maven ด้วย
+- แก้เสร็จรัน `make test` แล้ว build ใหม่ (`make build` สำหรับ jar หรือ `docker compose build` สำหรับ image — Dockerfile build jar เองในตัว image จึงต้อง build image ใหม่ทุกครั้งที่แก้ `pom.xml`) จากนั้นตั้ง `url` ของ datasource ตามปกติ ไม่ต้องแก้โค้ด
+- ข้อยกเว้น: `statement_timeout` ที่ตั้งตอนเปิด connection มีเฉพาะ PostgreSQL แต่ query timeout ของ JDBC ใช้ได้กับทุก driver
+
+#### ลิขสิทธิ์ของ driver ที่แจกจ่ายไปกับ jar / image
+
+| Driver | License | สิ่งที่ต้องทำเมื่อแจกจ่าย jar หรือ image |
+|---|---|---|
+| PostgreSQL | BSD-2-Clause | เก็บ notice |
+| SQL Server (`mssql-jdbc`) | MIT | เก็บ notice |
+| MySQL (`mysql-connector-j`) | GPL-2.0 พร้อม Universal FOSS Exception | ตรวจเงื่อนไข GPL กับ license ของโปรเจกต์/ผลิตภัณฑ์ของคุณก่อน (โปรเจกต์นี้ยังไม่มีไฟล์ `LICENSE` และ jar มี `jasper-report-api-thai-fonts` ที่เป็น GPL อยู่แล้ว) |
+| Oracle (`ojdbc11`) | [Oracle Free Use Terms and Conditions (FUTC)](https://www.oracle.com/downloads/licenses/oracle-free-license.html) | ดูข้างล่าง |
+
+FUTC (สรุปจากข้อความบนหน้า license ของ Oracle ไม่ใช่คำแนะนำทางกฎหมาย): ใช้ภายในองค์กรได้ และแจกจ่ายต่อได้ **เฉพาะตัว driver ที่ไม่ได้แก้ไข** โดย
+- ห้ามคิดค่าใช้จ่ายเพิ่มจากผู้ใช้ปลายทางสำหรับการใช้ driver
+- ต้องแนบสำเนา license (ข้อความ FUTC) ไปกับการแจกจ่ายทุกครั้ง — การเผยแพร่ image ไปที่ `ghcr.io` ถือเป็นการแจกจ่าย
+- ห้ามลบ notice ของ Oracle และห้าม reverse engineer
+- ต้องปฏิบัติตามกฎหมายควบคุมการส่งออกของสหรัฐฯ
+
+ถ้าเงื่อนไขเหล่านี้ใช้กับคุณไม่ได้ (เช่นขายเป็นผลิตภัณฑ์ที่คิดค่า license) ให้ลบ `ojdbc11` ออกจาก `pom.xml` ตามวิธีข้างบน
 
 ### หลาย tenant / หลาย DB
 
@@ -652,7 +696,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 71 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # 73 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

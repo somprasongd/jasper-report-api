@@ -1,0 +1,12 @@
+<jasperReport name="pg_sleep" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0041">
+	<property name="report.datasource" value="pg"/>
+	<query language="sql"><![CDATA[select pg_sleep(60)::text as x]]></query>
+	<field name="x" class="java.lang.String"/>
+	<detail>
+		<band height="30">
+			<element kind="textField" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0042" x="0" y="0" width="200" height="24" fontName="TH Sarabun New" fontSize="16">
+				<expression><![CDATA["row " + $F{x}]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

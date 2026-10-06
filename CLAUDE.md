@@ -21,7 +21,7 @@ make api-key CLIENT=hosos-web                # generate an API key (scripts/api-
 ```
 
 - No linter/formatter is configured.
-- `S3SourceTest` and `PresignedUrlTest` start a `rustfs/rustfs` container via Testcontainers and are skipped without Docker.
+- `S3SourceTest` and `PresignedUrlTest` start a `rustfs/rustfs` container, and `PostgresQueryTimeoutTest` a `postgres:16-alpine` one, via Testcontainers; all are skipped without Docker.
 - The Maven repo at `libs/maven-repo` is a `file://` repository holding the Thai font jar (TH Sarabun New). `FontJarPinTest` and the Dockerfile (`sha256sum -c libs/font-jar.sha256`) pin it by SHA-256 because the font distribution approval is bound to that exact jar — do not replace it without a new approval.
 - Releases: see [Releasing](#releasing).
 

@@ -12,6 +12,7 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 - `data` field in render and validate requests: JSON read by a report's `<query language="json">` instead of a database. Limited by `report.limits.max-data-size` (default 10MB); not logged. New error codes `DATA_AND_DATASOURCE`, `DATA_NOT_SUPPORTED`, `DATA_TOO_LARGE` and `DATASOURCE_NONE_NOT_ALLOWED`.
 - `jasperreports-json` dependency.
 - MySQL, SQL Server and Oracle JDBC drivers on the class path (about 12 MB more in the jar); a datasource only needs its URL.
+- README: how to add or remove JDBC drivers in `pom.xml`, and the licence terms of the bundled drivers (Oracle FUTC requires a copy of the licence with every distribution).
 - `report.limits.query-timeout` now applies to every JDBC driver through `Statement.setQueryTimeout` (it used to be PostgreSQL only) and a query over the limit answers 504 `QUERY_TIMEOUT`.
 
 ### Changed
