@@ -1,0 +1,41 @@
+version: 2
+
+# Weekly update PRs; CI (.github/workflows/ci.yml) runs the full test suite on each one.
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      spring-boot:
+        patterns: ["org.springframework.boot:*"]
+      jasperreports:
+        patterns: ["net.sf.jasperreports:*"]
+      aws-sdk:
+        patterns: ["software.amazon.awssdk:*"]
+      testcontainers:
+        patterns: ["org.testcontainers:*"]
+    ignore:
+      # Pinned by SHA-256 (FontJarPinTest, libs/font-jar.sha256); the font licence approval is bound to this exact jar
+      - dependency-name: "com.github.somprasongd.jasperreport:jasper-report-api-thai-fonts"
+      # A new JasperReports major changes the JRXML format (6 -> 7 broke every report); upgrade on purpose, not by bot
+      - dependency-name: "net.sf.jasperreports:*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # Stay on Java 21 (the tag's major is the JDK version) until it is changed together with pom.xml
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

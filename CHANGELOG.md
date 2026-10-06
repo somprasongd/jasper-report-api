@@ -9,6 +9,8 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ### Added
 - `report.sources.http.allowed-hosts` (`HTTP_ALLOWED_HOSTS`) accepts `host:port` (only that port; a URL without a port means 80/443) and `*.domain` wildcards (every sub-domain at any depth, not the domain itself), for example `*.reports.svc.cluster.local`. A plain `host` still allows every port. A malformed entry now stops the API at startup.
+- CI workflow: tests and a Docker image build on every push to `main` and every pull request.
+- Dependabot: weekly update PRs for Maven dependencies, the Docker base images and GitHub Actions.
 
 ### Changed
 - `SOURCE_NOT_ALLOWED` for a host outside the allowlist names the host with its port (`host 'files.internal:443' ...`).
