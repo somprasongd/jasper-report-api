@@ -36,7 +36,8 @@ class BundleVersionTest {
         try {
             Path root = Files.createTempDirectory("reports-root");
             Path dir = Files.createDirectories(root.resolve("live"));
-            for (String f : new String[]{"th_demo.jrxml", "sub_info.jrxml"}) {
+            for (String f : new String[]{"demo.jrxml", "sub_info.jrxml", "messages.properties", "messages_en.properties",
+                    "sub_messages.properties", "sub_messages_en.properties"}) {
                 Files.copy(Path.of("src/test/resources/reports/demo/" + f), dir.resolve(f), StandardCopyOption.REPLACE_EXISTING);
             }
             Files.createDirectories(dir.resolve("assets"));
@@ -57,7 +58,7 @@ class BundleVersionTest {
 
     private MvcResult render() throws Exception {
         return mvc.perform(post("/v1/reports/render").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"mainReport\":{\"url\":\"live/th_demo.jrxml\"},\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]}")).andReturn();
+                .content("{\"mainReport\":{\"url\":\"live/demo.jrxml\"},\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]}")).andReturn();
     }
 
     private static String text(MvcResult result) throws Exception {
@@ -73,9 +74,10 @@ class BundleVersionTest {
         String v1 = before.getResponse().getHeader("X-Report-Version");
         assertThat(render().getResponse().getHeader("X-Report-Version")).as("unchanged folder, same version").isEqualTo(v1);
 
-        Path main = ROOT.resolve("live/th_demo.jrxml");
-        Files.writeString(main, Files.readString(main).replace("ใบรับรองแพทย์ทดสอบ", "แก้ไขบนโฟลเดอร์แล้ว"), StandardCharsets.UTF_8);
-        Files.setLastModifiedTime(main, FileTime.fromMillis(System.currentTimeMillis() + 5000));
+        // the title lives in the message bundle: editing a .properties file is picked up like editing the JRXML
+        Path messages = ROOT.resolve("live/messages.properties");
+        Files.writeString(messages, Files.readString(messages).replace("ใบรับรองแพทย์ทดสอบ", "แก้ไขบนโฟลเดอร์แล้ว"), StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(messages, FileTime.fromMillis(System.currentTimeMillis() + 5000));
 
         MvcResult after = render();
         assertThat(text(after)).contains("แก้ไขบนโฟลเดอร์แล้ว");
@@ -94,6 +96,23 @@ class BundleVersionTest {
         } finally {
             Files.writeString(broken, original, StandardCharsets.UTF_8);
             Files.setLastModifiedTime(broken, FileTime.fromMillis(System.currentTimeMillis() + 12000));
+        }
+    }
+
+    @Test
+    void validateWarnsAboutMessageKeysMissingInALanguage() throws Exception {
+        Path english = ROOT.resolve("live/messages_en.properties");
+        String original = Files.readString(english);
+        try {
+            Files.writeString(english, "title=Only a title\n", StandardCharsets.UTF_8);
+            Files.setLastModifiedTime(english, FileTime.fromMillis(System.currentTimeMillis() + 20000));
+            String body = mvc.perform(post("/v1/reports/validate").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"mainReport\":{\"url\":\"live/demo.jrxml\"}}"))
+                    .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            assertThat(body).contains("messages_en.properties lacks keys").contains("patient").contains("printed_at");
+        } finally {
+            Files.writeString(english, original, StandardCharsets.UTF_8);
+            Files.setLastModifiedTime(english, FileTime.fromMillis(System.currentTimeMillis() + 25000));
         }
     }
 }

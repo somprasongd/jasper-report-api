@@ -40,6 +40,7 @@ public class ReportController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.inline().filename(result.fileName(), StandardCharsets.UTF_8).build().toString())
                 .header("X-Report-Version", result.version())
+                .header(HttpHeaders.CONTENT_LANGUAGE, result.locale())
                 .body(result.content());
     }
 

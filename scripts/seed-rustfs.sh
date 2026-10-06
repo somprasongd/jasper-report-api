@@ -19,4 +19,4 @@ aws_cli() {
 
 aws_cli s3 mb s3://reports 2>/dev/null || true
 aws_cli s3 sync /reports s3://reports/samples --delete
-echo "Uploaded. Use mainReport.url = s3://reports/samples/demo/th_demo.jrxml"
+echo "Uploaded. Use mainReport.url = s3://reports/samples/demo/demo.jrxml"

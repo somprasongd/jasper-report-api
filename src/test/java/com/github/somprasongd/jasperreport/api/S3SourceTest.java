@@ -106,24 +106,27 @@ class S3SourceTest {
     void rendersFromS3FolderPicksUpChangesAndEnforcesTheAllowList() throws Exception {
         try (S3Client s3 = admin()) {
             s3.createBucket(CreateBucketRequest.builder().bucket("reports").build());
-            put(s3, "opd/demo/th_demo.jrxml", resource("demo/th_demo.jrxml"));
+            put(s3, "opd/demo/demo.jrxml", resource("demo/demo.jrxml"));
             put(s3, "opd/demo/sub_info.jrxml", resource("demo/sub_info.jrxml"));
+            for (String f : new String[]{"messages.properties", "messages_en.properties", "sub_messages.properties", "sub_messages_en.properties"}) {
+                put(s3, "opd/demo/" + f, resource("demo/" + f));
+            }
             put(s3, "opd/demo/assets/logo.png", resource("demo/assets/logo.png"));
 
-            MvcResult first = render("s3://reports/opd/demo/th_demo.jrxml");
+            MvcResult first = render("s3://reports/opd/demo/demo.jrxml");
             assertThat(first.getResponse().getStatus()).as(first.getResponse().getContentAsString()).isEqualTo(200);
             String firstText = text(first);
             assertThat(firstText).contains("ใบรับรองแพทย์ทดสอบ").contains("จำนวนครั้งที่มารับบริการ: 2");
             String version1 = first.getResponse().getHeader("X-Report-Version");
 
             // same objects -> same version (no re-download, no recompile)
-            assertThat(render("s3://reports/opd/demo/th_demo.jrxml").getResponse().getHeader("X-Report-Version")).isEqualTo(version1);
+            assertThat(render("s3://reports/opd/demo/demo.jrxml").getResponse().getHeader("X-Report-Version")).isEqualTo(version1);
 
             // edit the report in storage -> next render uses it
-            String edited = new String(resource("demo/th_demo.jrxml"), java.nio.charset.StandardCharsets.UTF_8)
+            String edited = new String(resource("demo/messages.properties"), java.nio.charset.StandardCharsets.UTF_8)
                     .replace("ใบรับรองแพทย์ทดสอบ", "ฉบับแก้ไขใน S3");
-            put(s3, "opd/demo/th_demo.jrxml", edited.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            MvcResult second = render("s3://reports/opd/demo/th_demo.jrxml");
+            put(s3, "opd/demo/messages.properties", edited.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            MvcResult second = render("s3://reports/opd/demo/demo.jrxml");
             assertThat(text(second)).contains("ฉบับแก้ไขใน S3").doesNotContain("ใบรับรองแพทย์ทดสอบ");
             assertThat(second.getResponse().getHeader("X-Report-Version")).isNotEqualTo(version1);
         }

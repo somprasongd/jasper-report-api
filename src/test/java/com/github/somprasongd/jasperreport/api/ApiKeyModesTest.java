@@ -20,7 +20,7 @@ class ApiKeyModesTest {
     @Autowired
     MockMvc mvc;
 
-    private static final String BODY = "{\"mainReport\":{\"url\":\"demo/th_demo.jrxml\"},\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]}";
+    private static final String BODY = "{\"mainReport\":{\"url\":\"demo/demo.jrxml\"},\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]}";
 
     @Test
     void optionalModeAcceptsNoKeyButNeverAWrongKey() throws Exception {

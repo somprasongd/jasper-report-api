@@ -16,6 +16,7 @@ import net.sf.jasperreports.engine.JRParameter;
 import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
 import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.util.JRResourcesUtil;
 import net.sf.jasperreports.engine.util.LocalJasperReportsContext;
 import net.sf.jasperreports.pdf.JRPdfExporter;
 import net.sf.jasperreports.export.SimpleExporterInput;
@@ -51,6 +52,8 @@ public class RenderService {
 
     private final DataSourceRegistry datasources;
     private final DatasourceSelector selector;
+    private final LocaleSelector localeSelector;
+    private final BundleClassLoaders classLoaders;
     private final SourceResolver sources;
     private final ReportCompiler compiler;
     private final ParameterBinder binder;
@@ -59,10 +62,12 @@ public class RenderService {
     private final Semaphore permits;
     private final AtomicInteger inflight = new AtomicInteger();
 
-    public RenderService(DataSourceRegistry datasources, DatasourceSelector selector, SourceResolver sources,
+    public RenderService(DataSourceRegistry datasources, DatasourceSelector selector, LocaleSelector localeSelector, BundleClassLoaders classLoaders, SourceResolver sources,
                          ReportCompiler compiler, ParameterBinder binder, ReportProperties properties, MeterRegistry meters) {
         this.datasources = datasources;
         this.selector = selector;
+        this.localeSelector = localeSelector;
+        this.classLoaders = classLoaders;
         this.sources = sources;
         this.compiler = compiler;
         this.binder = binder;
@@ -90,14 +95,15 @@ public class RenderService {
             datasourceName = selector.select(tenant, request.datasource(),
                     report.getProperty(DatasourceSelector.REPORT_PROPERTY), reportName);
             DataSource dataSource = datasources.get(tenant, datasourceName);
+            Locale locale = localeSelector.select(request.locale(), report.getProperty(LocaleSelector.REPORT_PROPERTY));
 
             Map<String, Object> params = new HashMap<>(binder.bind(report, request.parameters()));
-            addSystemParameters(params, report, bundle, request);
+            addSystemParameters(params, report, bundle, request, locale);
 
-            JasperPrint print = fill(report, params, dataSource, tenant, datasourceName);
+            JasperPrint print = fill(report, params, dataSource, tenant, datasourceName, bundle);
             byte[] pdf = exportPdf(print);
             outcome = "success";
-            return new RenderResult(pdf, PDF, fileName(request, reportName), bundle.version());
+            return new RenderResult(pdf, PDF, fileName(request, reportName), bundle.version(), locale.toLanguageTag());
         } catch (ApiException e) {
             outcome = e.code();
             throw e;
@@ -125,7 +131,7 @@ public class RenderService {
         inflight.incrementAndGet();
     }
 
-    private void addSystemParameters(Map<String, Object> params, JasperReport report, ResolvedBundle bundle, RenderRequest request) {
+    private void addSystemParameters(Map<String, Object> params, JasperReport report, ResolvedBundle bundle, RenderRequest request, Locale locale) {
         List<String> declared = java.util.Arrays.stream(report.getParameters()).map(JRParameter::getName).toList();
         if (declared.contains("SUBREPORTS")) {
             params.put("SUBREPORTS", new LazySubreports(compiler, bundle));
@@ -139,8 +145,9 @@ public class RenderService {
         params.put("IMAGE_DIR", assets);
         params.put("REPORT_ASSETS_DIR", assets);
         params.put(JRParameter.REPORT_TIME_ZONE, TimeZone.getTimeZone(properties.timezone()));
-        if (!properties.locale().isBlank()) {
-            params.put(JRParameter.REPORT_LOCALE, Locale.forLanguageTag(properties.locale().replace('_', '-')));
+        params.put(JRParameter.REPORT_LOCALE, locale);
+        if (declared.contains("REPORT_LANGUAGE")) {
+            params.put("REPORT_LANGUAGE", locale.getLanguage());
         }
     }
 
@@ -156,9 +163,14 @@ public class RenderService {
         return bundle.dir() + File.separator;
     }
 
-    private JasperPrint fill(JasperReport report, Map<String, Object> params, DataSource dataSource, String tenant, String datasourceName) {
+    private JasperPrint fill(JasperReport report, Map<String, Object> params, DataSource dataSource, String tenant, String datasourceName,
+                             ResolvedBundle bundle) {
         LocalJasperReportsContext context = new LocalJasperReportsContext(DefaultJasperReportsContext.getInstance());
         ReportProperties.Limits limits = properties.limits();
+        // message bundles next to the JRXML: JasperReports looks resources up through the thread class loader first
+        ClassLoader bundleLoader = classLoaders.forBundle(bundle);
+        context.setClassLoader(bundleLoader);
+        JRResourcesUtil.setThreadClassLoader(bundleLoader);
         context.setProperty("net.sf.jasperreports.governor.timeout.enabled", "true");
         context.setProperty("net.sf.jasperreports.governor.timeout", String.valueOf(limits.fillTimeout().toMillis()));
         context.setProperty("net.sf.jasperreports.governor.max.pages.enabled", "true");
@@ -170,6 +182,8 @@ public class RenderService {
                     "database '" + tenant + "/" + datasourceName + "' failed: " + rootMessage(e), e);
         } catch (JRException | RuntimeException e) {
             throw mapFillFailure(e, tenant, datasourceName);
+        } finally {
+            JRResourcesUtil.resetClassLoader();
         }
     }
 

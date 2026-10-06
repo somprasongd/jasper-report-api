@@ -47,9 +47,9 @@ Ready. Try it:
 
   curl -X POST http://127.0.0.1:${port}/api/v1/reports/render \\
     -H "X-API-Key: ${key}" -H "Content-Type: application/json" \\
-    -d '{"mainReport":{"url":"s3://reports/samples/demo/th_demo.jrxml"},"parameters":[{"name":"hn","value":"HN001"}]}' \\
+    -d '{"mainReport":{"url":"s3://reports/samples/demo/demo.jrxml"},"parameters":[{"name":"hn","value":"HN001"}]}' \\
     -o demo.pdf && open demo.pdf
 
-(the same report from the mounted folder: "url":"demo/th_demo.jrxml")
+(the same report from the mounted folder: "url":"demo/demo.jrxml")
 Stop with: make dev-down
 OUT

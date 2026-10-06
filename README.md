@@ -28,11 +28,11 @@ make dev-up
 ```bash
 curl -X POST http://127.0.0.1:8080/api/v1/reports/render \
   -H "X-API-Key: $(cat .dev-api-key)" -H "Content-Type: application/json" \
-  -d '{"mainReport":{"url":"s3://reports/samples/demo/th_demo.jrxml"},"parameters":[{"name":"hn","value":"HN001"}]}' \
+  -d '{"mainReport":{"url":"s3://reports/samples/demo/demo.jrxml"},"parameters":[{"name":"hn","value":"HN001"}]}' \
   -o demo.pdf
 ```
 
-รายงานเดียวกันจากโฟลเดอร์ที่ mount: `"url":"demo/th_demo.jrxml"` — เลิกใช้ด้วย `make dev-down` (ลบ volume ของ demo ด้วย)
+รายงานเดียวกันจากโฟลเดอร์ที่ mount: `"url":"demo/demo.jrxml"` — เลิกใช้ด้วย `make dev-down` (ลบ volume ของ demo ด้วย)
 
 ---
 
@@ -94,7 +94,8 @@ Base path คือ `/api`
     { "name": "item_ids", "value": [1, 2, 3] }
   ],
   "format": "pdf",
-  "fileName": "ใบรับรองแพทย์"
+  "fileName": "ใบรับรองแพทย์",
+  "locale": "en"
 }
 ```
 
@@ -110,12 +111,13 @@ Base path คือ `/api`
 | `parameters[].type` | ไม่ | ใช้เฉพาะเมื่อ JRXML ประกาศชนิดกว้างๆ (`Object`, `Collection`) |
 | `format` | ไม่ | `pdf` (ค่าเริ่มต้น; ตอนนี้รองรับเฉพาะ `pdf`) |
 | `fileName` | ไม่ | ชื่อไฟล์ใน `Content-Disposition` (ภาษาไทยได้) |
+| `locale` | ไม่ | ภาษาของรายงาน เช่น `th`, `en`, `en-US` — **ชนะค่าที่รายงานกำหนดไว้เอง** ดู [หลายภาษา](#หลายภาษา-i18n) |
 
 Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (ไม่บังคับ), `X-Request-Id` (ไม่บังคับ; ไม่ส่งจะสร้างให้ และส่งกลับ + อยู่ใน log ทุกบรรทัดของ request)
 
 ### Response
 
-- สำเร็จ `200`, `Content-Type: application/pdf`, `Content-Disposition: inline; filename*=UTF-8''...`, `X-Report-Version` (เวอร์ชันของโฟลเดอร์รายงานที่ใช้จริง), `X-Request-Id`
+- สำเร็จ `200`, `Content-Type: application/pdf`, `Content-Disposition: inline; filename*=UTF-8''...`, `X-Report-Version` (เวอร์ชันของโฟลเดอร์รายงานที่ใช้จริง), `Content-Language` (ภาษาที่ใช้จริง เช่น `th`), `X-Request-Id`
 - ผิดพลาด `application/problem+json`:
 
 ```json
@@ -133,6 +135,7 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `SOURCE_NOT_ALLOWED` | 400 | path/bucket/host/scheme ไม่ได้รับอนุญาต หรือพยายามออกนอกโฟลเดอร์ |
 | `PARAMETER_INVALID` | 400 | แปลงค่า parameter ไม่ได้ (ระบุชื่อ parameter) |
 | `FORMAT_UNSUPPORTED` | 400 | `format` ที่ยังไม่รองรับ |
+| `LOCALE_INVALID` | 400 (ใน request) / 422 (ใน JRXML) | `locale` ไม่ใช่ language tag เช่น `th`, `en-US` |
 | `REPORT_NOT_FOUND` | 404 | หาไฟล์/bucket ไม่เจอ |
 | `REPORT_COMPILE_FAILED` | 422 | JRXML compile ไม่ผ่าน (รวมถึงเป็นรูปแบบ 6.x) |
 | `PAGE_LIMIT_EXCEEDED` | 422 | เกิน `report.limits.max-pages` |
@@ -158,24 +161,26 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `Object` | ใช้ `type` (`string, integer, number, date, time, timestamp, bool, array_str, array_int`) ถ้าไม่ส่งจะได้ค่าตามที่ส่ง |
 
 - parameter ที่ **ไม่ได้ประกาศใน JRXML** ถูกตัดทิ้ง (เตือนใน log; ตั้ง `report.parameters.strict=true` ให้ตอบ 400 แทน)
-- `SUBREPORTS`, `SUBREPORT_DIR`, `IMAGE_DIR`, `REPORT_ASSETS_DIR`, `REPORT_CONNECTION`, `REPORT_TIME_ZONE`, ... เป็นของ API — ค่าที่ client ส่งมาถูกตัดทิ้ง
+- `SUBREPORTS`, `SUBREPORT_DIR`, `IMAGE_DIR`, `REPORT_ASSETS_DIR`, `REPORT_LANGUAGE`, `REPORT_LOCALE`, `REPORT_CONNECTION`, `REPORT_TIME_ZONE`, ... เป็นของ API — ค่าที่ client ส่งมาถูกตัดทิ้ง
 - ค่าที่แปลงไม่ได้ → `400 PARAMETER_INVALID` ระบุชื่อ parameter (ไม่ส่งค่า `null` เงียบๆ แบบเดิม)
-- API ตั้ง time zone ของ JVM เป็น `report.timezone` (`Asia/Bangkok`) เพื่อไม่ให้ผลขึ้นกับเครื่อง/container; ไม่ตั้ง `REPORT_LOCALE` ให้ (ใช้ locale ของ JVM) เพราะ `th_TH` จะแสดงปี พ.ศ. ใน pattern วันที่ — ตั้งได้ด้วย `report.locale`
+- API ตั้ง time zone ของ JVM เป็น `report.timezone` (`Asia/Bangkok`) เพื่อไม่ให้ผลขึ้นกับเครื่อง/container และตั้ง `REPORT_LOCALE` ให้ทุกรายงานตามที่เลือกไว้ใน [หลายภาษา](#หลายภาษา-i18n)
 
 ### `POST /api/v1/reports/validate`
 
 ใช้ body เดียวกับ `render` (ไม่ต้องมี `parameters`) ตอบ JSON เช่น
 
 ```json
-{ "report": "th_demo.jrxml", "bundle": "s3://reports/samples/demo/", "version": "71e9fff3477ebf58", "tenant": "default",
+{ "report": "demo.jrxml", "bundle": "s3://reports/samples/demo/", "version": "71e9fff3477ebf58", "tenant": "default",
   "datasource": { "declaredInReport": "opd", "requested": null, "resolved": "opd" },
   "parameters": [ { "name": "hn", "class": "java.lang.String", "hasDefault": false } ],
+  "locale": { "declaredInReport": "th", "requested": null, "resolved": "th" },
+  "messages": { "demo.jrxml": { "bundle": "messages", "languages": ["(base)", "en"], "keysUsed": 3 } },
   "fonts": { "used": ["TH Sarabun New"], "missing": [] },
   "subreports": ["sub_info.jrxml"],
   "warnings": [] }
 ```
 
-`warnings` เตือนเมื่อ query ใช้ `$P!{...}` (ต่อค่าเข้า SQL ตรงๆ เสี่ยง SQL injection), ใช้ฟอนต์ที่ไม่มี, หรือ datasource ที่ resolve ไม่ได้
+`warnings` เตือนเมื่อ `$R{key}` ขาดในภาษาใดภาษาหนึ่ง, query ใช้ `$P!{...}` (ต่อค่าเข้า SQL ตรงๆ เสี่ยง SQL injection), ใช้ฟอนต์ที่ไม่มี, หรือ datasource ที่ resolve ไม่ได้
 
 ---
 
@@ -284,6 +289,73 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 
 ---
 
+## หลายภาษา (i18n)
+
+JasperReports รองรับหลายภาษาผ่าน **resource bundle**: รายงานประกาศ `resourceBundle="messages"` แล้วใช้ `$R{key}` แทนข้อความ ภาษาที่ใช้ดูจาก `REPORT_LOCALE` — API เลือกภาษาให้ แล้วหาไฟล์ `messages_<ภาษา>.properties` ในโฟลเดอร์เดียวกับ JRXML
+
+```xml
+<jasperReport name="demo" language="groovy" resourceBundle="messages" whenResourceMissingType="Key" ...>
+    <property name="report.locale" value="th"/>        <!-- ภาษาเริ่มต้นของรายงานนี้ (ไม่บังคับ) -->
+    ...
+    <element kind="textField" ...>
+        <expression><![CDATA[$R{title}]]></expression>
+    </element>
+```
+
+```
+demo/
+├── demo.jrxml
+├── sub_info.jrxml              ← subreport ประกาศ resourceBundle="sub_messages" ของตัวเองได้
+├── messages.properties         ← ภาษาตั้งต้น (ใช้เมื่อไม่มีไฟล์ของภาษาที่ขอ)
+├── messages_en.properties
+├── sub_messages.properties
+└── sub_messages_en.properties
+```
+
+ตัวอย่างใช้งานได้จริง: [samples/reports/demo/](samples/reports/demo/)
+
+### เลือกภาษาอย่างไร
+
+ส่งใน **JSON body** เป็นฟิลด์ `locale` — เหมือนกับ `datasource`: รายงานกำหนดค่าเริ่มต้นไว้ในไฟล์ได้ และ **ถ้า request ส่งมา request ชนะ**
+
+1. `locale` ใน request body (`th`, `en`, `th-TH`, `en-US`, ...)
+2. `<property name="report.locale" value="th"/>` ใน JRXML
+3. `report.locale` ใน config (ทั้งระบบ)
+4. `en`
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H "Content-Type: application/json" \
+  -d '{"mainReport":{"url":"demo/demo.jrxml"},"parameters":[{"name":"hn","value":"HN001"}],"locale":"en"}' -o demo-en.pdf
+```
+
+ทำไมใส่ใน body ไม่ใช่ URL/query string: `url` คือ "รายงานไหน" ส่วน `locale` คือ "ตัวเลือกการ render" (เหมือน `format`, `fileName`) การ render ทั้งหมดเป็น `POST` + JSON อยู่แล้ว จึงอยู่รวมกัน ทดสอบง่าย และไม่ปนกับ `Accept-Language` ของ browser (API นี้ไม่อ่าน `Accept-Language`) ภาษาที่ใช้จริงส่งกลับใน header `Content-Language` และดูผลก่อน render ได้ที่ `/validate`
+
+### สิ่งที่เปลี่ยนตามภาษา
+
+| อะไร | ทำอย่างไร |
+|---|---|
+| ข้อความ | `$R{key}` + ไฟล์ `messages_<ภาษา>.properties` (เขียนเป็น UTF-8 ได้ตรงๆ ไม่ต้อง `\uXXXX`) |
+| วันที่/ตัวเลข | ใช้ `$P{REPORT_LOCALE}` ใน expression เช่น `new java.text.SimpleDateFormat("d MMMM yyyy", $P{REPORT_LOCALE})` → `6 ตุลาคม 2026` / `6 October 2026` |
+| ข้อมูลจาก DB | ประกาศ `<parameter name="REPORT_LANGUAGE" class="java.lang.String"/>` API จะใส่ `th`/`en` ให้ ใช้ใน SQL ได้: `case when $P{REPORT_LANGUAGE} = 'en' then name_en else name end` |
+| subreport | มี resource bundle ของตัวเองได้ และใช้ภาษาเดียวกับรายงานหลักอัตโนมัติ |
+
+ข้อควรรู้ (ทดสอบแล้ว):
+- **ลำดับ fallback** ของไฟล์: `messages_th_TH` → `messages_th` → `messages` (ไฟล์ตั้งต้น) ภาษาที่ไม่มีไฟล์ (เช่น `fr`) จะได้ข้อความจากไฟล์ตั้งต้น — API ตั้ง locale ของ JVM เป็น neutral เพื่อไม่ให้ Java ข้ามไปใช้ไฟล์ของภาษาเครื่อง (เช่น `messages_en`) ก่อนไฟล์ตั้งต้น
+- **ปี พ.ศ.:** `th-TH` ทำให้ pattern วันที่แสดง **ปี พ.ศ.** (`2569`) ส่วน `th` เฉยๆ แสดงปี ค.ศ. (`2026`) — ถ้าต้องการปี ค.ศ. ในภาษาไทยให้ใช้ `th`
+- ไฟล์ใน **โฟลเดอร์รายงานมาก่อน classpath ของแอป** เสมอ ชื่อ `messages` จึงไม่ถูกไฟล์ใน library บังโดยบังเอิญ
+- key ที่ไม่มี: ตาม `whenResourceMissingType` ของรายงาน (`Key` = พิมพ์ชื่อ key ออกมา, `Error` = render ล้มเหลว) `/validate` เตือนล่วงหน้าว่า key ใดขาดในภาษาไหน และแสดงภาษาที่มีไฟล์ในแต่ละ bundle
+- **ฟอนต์:** `TH Sarabun New` มีเฉพาะอักษรไทยและละติน ภาษาอื่น (จีน ญี่ปุ่น พม่า ฯลฯ) ต้องเพิ่มฟอนต์ที่มี license เหมาะสม (ดู [ฟอนต์ไทย](#ฟอนต์ไทย))
+
+### message bundle เก็บที่ไหนได้
+
+| แหล่ง | รองรับ | หมายเหตุ |
+|---|---|---|
+| โฟลเดอร์ที่ mount (`/app/reports`) | ใช่ | แก้ไฟล์ `.properties` แล้ว request ถัดไปใช้ของใหม่ (เวอร์ชันของโฟลเดอร์เปลี่ยน) |
+| S3 (rustfs/MinIO/AWS) | ใช่ | ทั้งโฟลเดอร์ (JRXML + `.properties` + รูป) ถูกซิงก์ลงเครื่อง ทดสอบกับ rustfs แล้วรวมถึงแก้ `messages.properties` ใน S3 |
+| `http(s)://` | **ไม่** | แหล่งนี้ดึงได้ **ไฟล์ JRXML ไฟล์เดียว** ไม่มี subreport รูป หรือ `.properties` — รายงานที่ใช้ `$R{}` ให้เก็บที่โฟลเดอร์หรือ S3 |
+
+---
+
 ## API key
 
 **หน้าที่:** ระบุว่าใครเรียก (log/metric) และกันการเรียกโดยไม่ตั้งใจ — ไม่ได้แบ่งสิทธิ์รายรายงาน (ระบบนี้ออกแบบสำหรับ client ภายในที่เชื่อถือได้)
@@ -327,7 +399,7 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 | key | ค่าเริ่มต้น | ความหมาย |
 |---|---|---|
 | `report.timezone` | `Asia/Bangkok` | time zone ของ JVM และ `REPORT_TIME_ZONE` |
-| `report.locale` | ว่าง | `REPORT_LOCALE` (ว่าง = ใช้ locale ของ JVM) |
+| `report.locale` | ว่าง | ภาษาเริ่มต้นเมื่อทั้ง request และ JRXML ไม่ระบุ (ว่าง = `en`) |
 | `report.cache.check-interval` | `10s` | ตรวจการเปลี่ยนแปลงของโฟลเดอร์รายงานไม่ถี่กว่านี้ (`0s` = ทุก request) |
 | `report.cache.max-entries` | `500` | จำนวนรายงานที่ compile แล้วเก็บใน memory |
 | `report.cache.keep-versions` | `3` | จำนวนเวอร์ชันของโฟลเดอร์ S3 ที่เก็บไว้ในดิสก์ |
@@ -358,7 +430,7 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 30 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport), API key, limits, S3 จริงด้วย rustfs container
+make test        # 40 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport), API key, limits, S3 จริงด้วย rustfs container
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

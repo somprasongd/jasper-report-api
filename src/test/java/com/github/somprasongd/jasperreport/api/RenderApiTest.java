@@ -53,7 +53,7 @@ class RenderApiTest {
 
     private static String demoRequest(String extra) {
         return """
-                {"mainReport":{"name":"ใบรับรองแพทย์","url":"demo/th_demo.jrxml"},
+                {"mainReport":{"name":"ใบรับรองแพทย์","url":"demo/demo.jrxml"},
                  "parameters":[{"name":"hn","value":"HN001"}%s]}""".formatted(extra);
     }
 
@@ -74,7 +74,7 @@ class RenderApiTest {
             String text = new PDFTextStripper().getText(doc);
             assertThat(text).contains("ใบรับรองแพทย์ทดสอบ").contains("สมชาย").contains("HN001")
                     .contains("จำนวนครั้งที่มารับบริการ: 2")   // sub-report ran its own query
-                    .contains("พิมพ์เมื่อ 2026-10-06 10:30");   // +07:00 timestamp kept in Asia/Bangkok
+                    .contains("พิมพ์เมื่อ 6 ตุลาคม 2026 10:30");   // +07:00 timestamp kept in Asia/Bangkok, Thai month, Gregorian year
 
             Set<String> fonts = new HashSet<>();
             for (var name : doc.getPage(0).getResources().getFontNames()) {
@@ -93,7 +93,7 @@ class RenderApiTest {
 
             BufferedImage page = new PDFRenderer(doc).renderImageWithDPI(0, 100);
             java.nio.file.Files.createDirectories(java.nio.file.Path.of("target/test-output"));
-            javax.imageio.ImageIO.write(page, "png", new java.io.File("target/test-output/th_demo.png"));
+            javax.imageio.ImageIO.write(page, "png", new java.io.File("target/test-output/demo.png"));
             double scale = 100 / 72.0;
             // QR code occupies x 20..120, y 120..220 (points); barcode x 170..420, y 120..180
             assertThat(darkRatio(page, (int) (25 * scale), (int) (125 * scale), (int) (90 * scale), (int) (90 * scale)))
@@ -171,7 +171,7 @@ class RenderApiTest {
     void legacyAliasEndpointWorksWithPdfStyleBody() throws Exception {
         mvc.perform(post("/v1/jasper/generate").header("X-API-Key", KEY).contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"datasource":"opd","mainReport":{"name":"th_demo","url":"demo/th_demo.jrxml","modified_at":1},
+                                {"datasource":"opd","mainReport":{"name":"demo","url":"demo/demo.jrxml","modified_at":1},
                                  "parameters":[{"name":"hn","type":"string","value":"HN001"}]}"""))
                 .andExpect(status().isOk());
     }
@@ -248,7 +248,17 @@ class RenderApiTest {
                 .andExpect(jsonPath("$.parameters[?(@.name=='hn')].class").value("java.lang.String"))
                 .andExpect(jsonPath("$.fonts.used[0]").value("TH Sarabun New"))
                 .andExpect(jsonPath("$.fonts.missing").isEmpty())
-                .andExpect(jsonPath("$.subreports[0]").value("sub_info.jrxml"));
+                .andExpect(jsonPath("$.subreports[0]").value("sub_info.jrxml"))
+                .andExpect(jsonPath("$.locale.declaredInReport").value("th"))
+                .andExpect(jsonPath("$.locale.resolved").value("th"))
+                .andExpect(jsonPath("$.messages['demo.jrxml'].bundle").value("messages"))
+                .andExpect(jsonPath("$.messages['demo.jrxml'].languages[0]").value("(base)"))
+                .andExpect(jsonPath("$.messages['demo.jrxml'].languages[1]").value("en"))
+                .andExpect(jsonPath("$.warnings").isEmpty());
+        // a request locale is reported as the resolved one
+        mvc.perform(post("/v1/reports/validate").header("X-API-Key", KEY).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mainReport\":{\"url\":\"demo/demo.jrxml\"},\"locale\":\"en-US\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.locale.resolved").value("en-US"));
     }
 
     @Test

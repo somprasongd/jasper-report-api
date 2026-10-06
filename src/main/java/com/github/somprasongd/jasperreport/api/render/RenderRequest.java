@@ -18,7 +18,9 @@ public record RenderRequest(
         List<@Valid ReportRef> subReports,
         List<@Valid ParamInput> parameters,
         String format,
-        String fileName) {
+        String fileName,
+        /** Language tag (th, en, th-TH, ...). Wins over the report's own default. */
+        String locale) {
 
     public record ReportRef(String name, @NotBlank String url, Long modified_at) {
     }

@@ -118,6 +118,7 @@
 | `parameters[].type` | ไม่ | ใช้เมื่อ JRXML ประกาศชนิดกว้าง (`Object`, `Collection`) หรือเพื่อความเข้ากันได้ |
 | `parameters[].value` | ใช่ | รับได้ทั้ง string (แบบเดิม), number, boolean, array, `null` |
 | `format` | ไม่ | `pdf` (ค่าเริ่มต้น), `xlsx`, `csv` |
+| `locale` | ไม่ | ภาษาของรายงาน (`th`, `en`, `en-US`, ...) — ชนะ `report.locale` ใน JRXML; ดู [§19](#19-หลายภาษา-i18n) |
 
 Header ที่เกี่ยวข้อง: `X-API-Key` (บังคับหรือไม่ขึ้นกับโหมดใน §12.1), `X-Request-Id` (ไม่บังคับ — ไม่ส่งจะสร้างให้), `sentry-trace`/`traceparent` (ส่งต่อ trace)
 
@@ -595,3 +596,34 @@ implement ใน repo นี้เมื่อ 2026-10-06 ตามแผน §1
 10. **ผลของ compile ที่ล้มเหลวถูกจำ 5 วินาที** กัน compile ซ้ำถี่ๆ แต่เวอร์ชันของโฟลเดอร์เปลี่ยนเมื่อไร ลองใหม่ทันที
 11. **ไม่ได้ทำใน phase 1 (ตามแผน):** async jobs, `xlsx`/`csv`, virtualizer, alias ฟอนต์ `TH SarabunPSK`, tenant ที่มี root/bucket ของตัวเอง, Sentry (ใช้ log แบบ structured + metrics แทน), การบล็อก IP ภายในของ http(s) source (ใช้ allowlist ชื่อ host อย่างเดียว)
 12. ผลลัพธ์ถูกสร้างใน memory ทั้งก้อนก่อนตอบ (พอสำหรับรายงานที่จำกัดด้วย `max-pages`) — ถ้ามีรายงานใหญ่มาก ให้ทำ virtualizer/async ใน phase 2
+
+---
+
+## 19. หลายภาษา (i18n)
+
+เพิ่มหลัง phase 1 (2026-10-06) ตามคำขอ: รายงานเลือกภาษาได้โดย **ใช้รูปแบบเดียวกับ datasource**
+
+### 19.1 ข้อตัดสินใจ
+
+| # | หัวข้อ | ข้อตัดสินใจ |
+|---|---|---|
+| D13 | กลไก | ใช้ resource bundle ของ JasperReports (`resourceBundle="messages"` + `$R{key}`) ไม่ทำระบบแปลของเราเอง |
+| D14 | ส่งภาษาทางไหน | **JSON body** ฟิลด์ `locale` (ไม่ใช้ URL/query และไม่อ่าน `Accept-Language`): `url` = รายงานไหน, `locale` = ตัวเลือกการ render เหมือน `format`/`fileName`; `Accept-Language` เป็นภาษาของ browser/ผู้ใช้ปลายทางซึ่งมักไม่ใช่ภาษาของเอกสาร |
+| D15 | ค่าเริ่มต้น | ลำดับ: request `locale` > `<property name="report.locale">` ใน JRXML > `report.locale` ใน config > `en`; **request ชนะ** (เหมือน D4) |
+| D16 | ตำแหน่งไฟล์ข้อความ | `messages*.properties` อยู่ในโฟลเดอร์เดียวกับ JRXML (bundle) → ใช้ได้กับโฟลเดอร์ที่ mount และ S3; `http(s)` ดึงได้ไฟล์เดียวจึงใช้ไม่ได้ |
+| D17 | ข้อมูลหลายภาษาใน DB | API ใส่ parameter `REPORT_LANGUAGE` (`th`/`en`, ถ้ารายงานประกาศ) ให้ใช้ใน SQL |
+| D18 | Response | header `Content-Language`; `/validate` แสดง locale ที่ resolve ได้, ภาษาที่มีไฟล์ในแต่ละ bundle และเตือน key ที่ขาด |
+
+### 19.2 สิ่งที่พบจากการทดสอบ (ส่งผลต่อการ implement)
+
+1. **Java ข้ามไปใช้ไฟล์ของภาษาเครื่องก่อนไฟล์ตั้งต้น:** `ResourceBundle` ใช้ locale ของ JVM เป็น fallback ก่อน base bundle — บนเครื่อง `en_US` คำขอ `th` ที่ไม่มี `messages_th.properties` ได้ `messages_en.properties` แทนที่จะเป็น `messages.properties` แก้โดยตั้ง locale ของ JVM เป็น `ROOT` ตอนเริ่ม (`RuntimeConfig`) — รายงานได้ `REPORT_LOCALE` ที่ชัดเจนเสมอ จึงไม่กระทบอย่างอื่น
+2. **ไฟล์ใน classpath บังไฟล์ของรายงานได้:** JasperReports หา resource ผ่าน class loader ของ thread ก่อน — พบจากเทสต์ที่วาง `messages.properties` ไว้ที่ราก classpath แล้วรายงานได้ค่านั้นแทน แก้โดยให้โฟลเดอร์ของรายงาน (version นั้น) เป็น class loader ที่ค้น **ก่อน** classpath (`BundleClassLoaders` + `JRResourcesUtil.setThreadClassLoader` ระหว่าง fill) และสร้าง loader ใหม่เมื่อเวอร์ชันของโฟลเดอร์เปลี่ยน เพื่อให้แก้ `.properties` แล้วมีผลทันที (`ResourceBundle` cache ต่อ loader)
+3. **`FileRepositoryService` ใช้ไม่ได้กับ bundle** (ลองแล้ว ไม่พบไฟล์) ใช้ class loader แทน
+4. **`th-TH` พิมพ์ปี พ.ศ. ใน pattern วันที่ แต่ `th` พิมพ์ ค.ศ.** (ทดสอบ: `2569` เทียบ `2026`) — เอกสาร/ตัวอย่างแนะนำ `th`
+5. subreport ที่มี `resourceBundle` ของตัวเองได้ภาษาเดียวกับรายงานหลักโดยไม่ต้องส่งต่อ parameter
+6. properties เขียน UTF-8 ตรงๆ ได้ (ภาษาไทยผ่าน)
+
+### 19.3 การทดสอบ
+
+`I18nTest` (ค่าเริ่มต้นจากรายงาน, request ชนะ + ข้อมูล DB แปลภาษา + subreport, `th-TH` vs `th`, ภาษาที่ไม่มีไฟล์ → ไฟล์ตั้งต้น, tag ผิด → 400), `LocaleSelectorTest` (ลำดับ), `/validate`, bundle ใน S3 (rustfs) และแก้ `messages.properties` ในโฟลเดอร์/S3 แล้วมีผล, และรันจริงใน Docker กับ PostgreSQL + rustfs (`locale: en` ได้ข้อความอังกฤษ ชื่อผู้ป่วยจากคอลัมน์ `name_en` และวันที่ `6 October 2026`)
+`/validate` เตือน key ที่ขาดในบางภาษา (`BundleVersionTest`) ยังไม่ได้ทดสอบ: ฟอนต์สำหรับภาษาอื่นนอกจากไทย/ละติน

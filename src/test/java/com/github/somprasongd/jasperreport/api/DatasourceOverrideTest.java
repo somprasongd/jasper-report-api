@@ -22,7 +22,7 @@ class DatasourceOverrideTest {
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder render(String extra) {
         return post("/v1/reports/render").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"mainReport\":{\"url\":\"demo/th_demo.jrxml\"},\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]" + extra + "}");
+                .content("{\"mainReport\":{\"url\":\"demo/demo.jrxml\"},\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]" + extra + "}");
     }
 
     @Test
