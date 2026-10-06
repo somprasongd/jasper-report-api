@@ -1,0 +1,16 @@
+<jasperReport name="params_demo" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0021">
+	<parameter name="s" class="java.lang.String"/>
+	<parameter name="i" class="java.lang.Integer"/>
+	<parameter name="l" class="java.lang.Long"/>
+	<parameter name="d" class="java.lang.Double"/>
+	<parameter name="bd" class="java.math.BigDecimal"/>
+	<parameter name="b" class="java.lang.Boolean"/>
+	<parameter name="date" class="java.sql.Date"/>
+	<parameter name="utilDate" class="java.util.Date"/>
+	<parameter name="time" class="java.sql.Time"/>
+	<parameter name="ts" class="java.sql.Timestamp"/>
+	<parameter name="ids" class="java.util.List"/>
+	<parameter name="names" class="java.util.Collection"/>
+	<parameter name="anything" class="java.lang.Object"/>
+	<title height="20"/>
+</jasperReport>

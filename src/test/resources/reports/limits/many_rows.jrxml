@@ -1,0 +1,12 @@
+<jasperReport name="many_rows" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0001">
+	<property name="report.datasource" value="opd"/>
+	<query language="sql"><![CDATA[select x from system_range(1, 3000)]]></query>
+	<field name="x" class="java.lang.Long"/>
+	<detail>
+		<band height="40">
+			<element kind="textField" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0002" x="0" y="0" width="200" height="30" fontName="TH Sarabun New" fontSize="16">
+				<expression><![CDATA["แถวที่ " + $F{x}]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

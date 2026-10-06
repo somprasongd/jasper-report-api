@@ -1,0 +1,20 @@
+<jasperReport name="main_dir" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="8d4f5a64-0b1e-4c5e-9d11-6a0d2d3a9001">
+	<property name="report.datasource" value="opd"/>
+	<parameter name="hn" class="java.lang.String"/>
+	<parameter name="SUBREPORT_DIR" class="java.lang.String"/>
+	<query language="sql"><![CDATA[select hn, name from patient where hn = $P{hn}]]></query>
+	<field name="hn" class="java.lang.String"/>
+	<field name="name" class="java.lang.String"/>
+	<title height="120" splitType="Stretch">
+		<element kind="textField" uuid="8d4f5a64-0b1e-4c5e-9d11-6a0d2d3a9002" x="0" y="0" width="555" height="30" fontName="TH Sarabun New" fontSize="20" bold="true">
+			<expression><![CDATA["แบบ SUBREPORT_DIR: " + $F{name}]]></expression>
+		</element>
+		<element kind="subreport" uuid="8d4f5a64-0b1e-4c5e-9d11-6a0d2d3a9003" x="0" y="40" width="555" height="60">
+			<parameter name="hn">
+				<expression><![CDATA[$P{hn}]]></expression>
+			</parameter>
+			<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+			<expression><![CDATA[$P{SUBREPORT_DIR} + "sub_dir.jasper"]]></expression>
+		</element>
+	</title>
+</jasperReport>

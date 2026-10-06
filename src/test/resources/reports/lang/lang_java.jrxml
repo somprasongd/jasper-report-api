@@ -1,0 +1,11 @@
+<jasperReport name="lang_java" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="ae4f5a64-0b1e-4c5e-9d11-6a0d2d3c0001">
+	<property name="report.datasource" value="opd"/>
+	<parameter name="hn" class="java.lang.String"/>
+	<query language="sql"><![CDATA[select hn, name from patient where hn = $P{hn}]]></query>
+	<field name="name" class="java.lang.String"/>
+	<title height="40">
+		<element kind="textField" uuid="ae4f5a64-0b1e-4c5e-9d11-6a0d2d3c0002" x="0" y="0" width="555" height="30" fontName="TH Sarabun New" fontSize="18">
+			<expression><![CDATA["expression language java: " + $F{name}.toUpperCase() + " " + java.lang.Math.max(1, 2)]]></expression>
+		</element>
+	</title>
+</jasperReport>

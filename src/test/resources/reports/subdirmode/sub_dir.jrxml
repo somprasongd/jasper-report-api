@@ -1,0 +1,10 @@
+<jasperReport name="sub_dir" language="groovy" pageWidth="555" pageHeight="60" columnWidth="555" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" ignorePagination="true" uuid="8d4f5a64-0b1e-4c5e-9d11-6a0d2d3a9010">
+	<parameter name="hn" class="java.lang.String"/>
+	<query language="sql"><![CDATA[select count(*) as visits from visit where hn = $P{hn}]]></query>
+	<field name="visits" class="java.lang.Long"/>
+	<title height="30">
+		<element kind="textField" uuid="8d4f5a64-0b1e-4c5e-9d11-6a0d2d3a9011" x="0" y="0" width="555" height="24" fontName="TH Sarabun New" fontSize="16">
+			<expression><![CDATA["sub-report (.jasper): visits=" + $F{visits}]]></expression>
+		</element>
+	</title>
+</jasperReport>

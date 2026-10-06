@@ -1,0 +1,28 @@
+report:
+  sources:
+    local:
+      root: src/test/resources/reports
+  cache:
+    work-dir: target/test-cache
+    check-interval: 0s
+  security:
+    api-key:
+      mode: required
+    api-keys:
+      - client-id: test-client
+        # sha256("jra_test_key_for_unit_tests")
+        sha256: 91aac4d18ac7001ff56c8f0977674b6e83ac2b37ae6ad37e06276836762e29c7
+tenants:
+  default:
+    default-datasource: opd
+    datasources:
+      opd:
+        url: jdbc:h2:mem:opd;DB_CLOSE_DELAY=-1;INIT=RUNSCRIPT FROM 'classpath:schema.sql'
+        username: sa
+        password: ""
+        pool-size: 2
+      ipd:
+        url: jdbc:h2:mem:ipd;DB_CLOSE_DELAY=-1
+        username: sa
+        password: ""
+        pool-size: 2

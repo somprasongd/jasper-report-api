@@ -1,0 +1,12 @@
+.git
+.claude
+target
+cache
+reports
+docs
+samples
+scripts
+jasperreports-generater
+jasperreports-pdf
+.env
+*.md

@@ -1,0 +1,45 @@
+# Copy to config/application.yml (git-ignored) and mount it at /app/config/application.yml in the container.
+# Spring Boot reads ./config/application.yml automatically; values here override the defaults and the environment.
+#
+# Use this form when you need several datasources per tenant or several tenants. A single database is easier
+# with the OPD_DB_* / IPD_DB_* variables in .env.
+
+report:
+  timezone: Asia/Bangkok
+  security:
+    api-key:
+      mode: required              # required | optional | disabled
+    api-keys:                     # generate with: make api-key CLIENT=<id>   (only the SHA-256 is stored here)
+      - client-id: hosos-web
+        sha256: 0000000000000000000000000000000000000000000000000000000000000000
+      - client-id: kvpo
+        sha256: 1111111111111111111111111111111111111111111111111111111111111111
+        expires-at: 2027-06-30T23:59:59+07:00
+  sources:
+    local:
+      root: /app/reports
+    s3:
+      endpoint: http://rustfs:9000
+      access-key: ${S3_ACCESS_KEY}
+      secret-key: ${S3_SECRET_KEY}
+      allowed-buckets: [reports]
+    http:
+      allowed-hosts: []           # empty = http(s):// report URLs are refused
+  limits:
+    max-concurrent-renders: 4
+    queue-wait: 10s
+    fill-timeout: 60s
+    query-timeout: 30s
+    max-pages: 500
+
+# Logical datasource names (opd, ipd, ...) are what clients and reports use; the real databases live here only.
+tenants:
+  default:
+    default-datasource: opd
+    datasources:
+      opd: { url: "jdbc:postgresql://db:5432/hosv4", username: report_ro, password: "${OPD_DB_PASSWORD}", pool-size: 5 }
+      ipd: { url: "jdbc:postgresql://db:5432/ipd",   username: report_ro, password: "${IPD_DB_PASSWORD}", pool-size: 3 }
+  hospital-a:                     # selected with the X-Tenant-Id header (or "tenant" in the body)
+    default-datasource: opd
+    datasources:
+      opd: { url: "jdbc:postgresql://10.0.1.10:5432/hosv4", username: report_ro, password: "${HA_OPD_DB_PASSWORD}" }

@@ -1,0 +1,65 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.DS_Store
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Runtime data (compiled reports cache, mounted JRXML/images) ###
+/cache/
+/reports/*
+!/reports/.gitkeep
+
+### Local-only configuration and secrets ###
+/.env
+/config/application.yml
+/config/application.yaml
+/config/application-local.*
+*.local.yml
+*.local.yaml
+
+### Generated report output ###
+**/*.jasper
+*.pdf
+!docs/**/*.pdf
+!src/test/resources/**/*.pdf
+
+### Claude Code ###
+.claude/
+
+### Legacy projects kept next to this repo for reference only (each has its own git history) ###
+/jasperreports-generater/
+/jasperreports-pdf/
+/.dev-api-key
+demo.pdf
+
+### Internal analysis of a private GitLab project: kept locally, not published ###
+/docs/project-comparison/automail-checkup-vs-jasperreports-pdf.md

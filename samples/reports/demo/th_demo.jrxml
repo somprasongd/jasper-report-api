@@ -1,0 +1,41 @@
+<jasperReport name="th_demo" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1001">
+	<property name="report.datasource" value="opd"/>
+	<parameter name="SUBREPORTS" class="java.util.Map"/>
+	<parameter name="IMAGE_DIR" class="java.lang.String"/>
+	<parameter name="hn" class="java.lang.String"/>
+	<parameter name="print_time" class="java.sql.Timestamp"/>
+	<query language="sql"><![CDATA[select hn, name from patient where hn = $P{hn}]]></query>
+	<field name="hn" class="java.lang.String"/>
+	<field name="name" class="java.lang.String"/>
+	<title height="330" splitType="Stretch">
+		<element kind="staticText" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1002" x="0" y="0" width="555" height="36" hTextAlign="Center" fontName="TH Sarabun New" fontSize="22" bold="true">
+			<text><![CDATA[ใบรับรองแพทย์ทดสอบ]]></text>
+		</element>
+		<element kind="textField" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1003" x="0" y="40" width="400" height="24" fontName="TH Sarabun New" fontSize="18">
+			<expression><![CDATA["ผู้ป่วย: " + $F{name} + "  HN " + $F{hn}]]></expression>
+		</element>
+		<element kind="textField" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1004" x="0" y="64" width="400" height="24" blankWhenNull="true" fontName="TH Sarabun New" fontSize="16">
+			<expression><![CDATA[$P{print_time} == null ? "" : "พิมพ์เมื่อ " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format($P{print_time})]]></expression>
+		</element>
+		<element kind="image" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1005" x="470" y="0" width="40" height="40">
+			<expression><![CDATA[$P{IMAGE_DIR} + "logo.png"]]></expression>
+		</element>
+		<element kind="component" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1006" x="0" y="100" width="100" height="100">
+			<component kind="barcode4j:QRCode" errorCorrectionLevel="M">
+				<codeExpression><![CDATA["HN:" + $F{hn} + " " + $F{name}]]></codeExpression>
+			</component>
+		</element>
+		<element kind="component" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1007" x="150" y="100" width="250" height="60">
+			<component kind="barcode4j:Code128">
+				<codeExpression><![CDATA[$F{hn}]]></codeExpression>
+			</component>
+		</element>
+		<element kind="subreport" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a1008" x="0" y="220" width="555" height="60">
+			<parameter name="hn">
+				<expression><![CDATA[$P{hn}]]></expression>
+			</parameter>
+			<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+			<expression><![CDATA[((net.sf.jasperreports.engine.JasperReport)$P{SUBREPORTS}.get("sub_info"))]]></expression>
+		</element>
+	</title>
+</jasperReport>

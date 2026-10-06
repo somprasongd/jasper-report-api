@@ -1,0 +1,57 @@
+# Run the API:            docker compose up -d --build
+# Try it with demo data:  docker compose --profile dev up -d --build   (adds PostgreSQL + rustfs, see README)
+services:
+  api:
+    build: .
+    image: somprasongd/jasper-report-api:latest
+    restart: unless-stopped
+    ports:
+      # bind to localhost unless a reverse proxy / other hosts must reach it; then restrict with a firewall
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75}
+    volumes:
+      - ${REPORTS_DIR:-./reports}:/app/reports:ro
+      - report-cache:/app/cache
+      # - ./config:/app/config:ro      # multi-tenant / many datasources: config/application.yml
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/api/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  # ---- demo infrastructure (profile "dev") -------------------------------------------------------------
+  postgres:
+    profiles: [dev]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hosv4
+      POSTGRES_USER: report_ro
+      POSTGRES_PASSWORD: report_ro
+    volumes:
+      - ./samples/dev-seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U report_ro -d hosv4"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rustfs:
+    profiles: [dev]
+    image: rustfs/rustfs:latest
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-rustfsadmin}
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - rustfs-data:/data
+
+volumes:
+  report-cache:
+  rustfs-data:
