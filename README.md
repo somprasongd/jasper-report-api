@@ -232,6 +232,43 @@ URL บอกได้แค่ "ไฟล์เดียว" ไม่มีโ
 - URL ที่มี query string (เช่น pre-signed URL) ใช้เป็นไฟล์ JRXML ได้ แต่ **ไม่ดาวน์โหลด `.properties` ให้** เพราะหา URL ข้างเคียงไม่ได้ — ใช้ S3 ผ่าน `s3://` แทน
 - ชุดรายงานใหญ่ที่มีหลายไฟล์ ใช้โฟลเดอร์หรือ S3 จะง่ายและเร็วกว่า (ซิงก์ตาม ETag ไม่ต้องดาวน์โหลดทุกไฟล์ทุกครั้ง)
 
+#### Presigned URL (private bucket)
+
+ให้ระบบอื่น (เช่น HIS API) ส่งรายงานมาให้โดยไม่ต้องให้ API นี้ถือ S3 credential: bucket เป็น private แล้วสร้าง presigned GET URL อายุสั้นต่อไฟล์ (rustfs/MinIO/AWS รองรับ) ส่งเป็น `mainReport.url` (และ `subReports[].url`)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant HIS as HIS API (ผู้เรียก)
+    participant S3 as S3 storage (private bucket)
+    participant API as jasper-report-api
+
+    Note over HIS,S3: HIS API ถือ S3 credential เอง — jasper-report-api ไม่ต้องถือ
+    HIS->>HIS: เซ็น presigned GET URL ของ object (อายุสั้น 1–5 นาที)<br/>ด้วย host ที่ API ใช้เข้าถึง storage
+    HIS->>API: POST /api/v1/reports/render<br/>mainReport.url = presigned URL (+ subReports[].url)
+    API->>API: ตรวจ host อยู่ใน HTTP_ALLOWED_HOSTS
+    API->>S3: GET presigned URL (ไม่ตาม redirect)
+    alt URL ใช้ได้
+        S3-->>API: JRXML
+        API->>API: identity = URL ตัด query ออก<br/>version = hash เนื้อหา → ไม่เปลี่ยนก็ไม่ compile ซ้ำ
+        API-->>HIS: 200 PDF
+    else หมดอายุ / signature ผิด (S3 ตอบ 403)
+        S3-->>API: 403
+        API-->>HIS: 502 STORAGE_ERROR (ไม่ใส่ URL/signature ใน error)
+    else ไม่มี object
+        S3-->>API: 404
+        API-->>HIS: 404 REPORT_NOT_FOUND
+    end
+```
+
+- ตั้ง `HTTP_ALLOWED_HOSTS` เป็น host ของ storage
+- signature ครอบคลุมชื่อ host: ต้องเซ็นด้วย host ที่ **API** ใช้เข้าถึง storage (ใน compose คือ `rustfs:9000` ไม่ใช่ `127.0.0.1:9000`)
+- URL เป็น bearer secret จนกว่าจะหมดอายุ — ตั้งอายุสั้น (ข้อมูลผู้ป่วย 1–5 นาที) ไม่เก็บ URL ลง DB (เก็บแค่ bucket + object key แล้วสร้างใหม่ทุกครั้ง) และไม่ log
+- signature ใหม่ของ object เดิมเป็น bundle เดิม (identity ตัด query ออก) จึงไม่ compile ซ้ำและไม่สร้างโฟลเดอร์ใหม่ในทุก request; แก้ object แล้วเวอร์ชันเปลี่ยนตามเนื้อหา
+- ได้เฉพาะไฟล์ที่เซ็น: ไม่มี `.properties`/รูป (ดูด้านบน) — รายงานหลายไฟล์ใช้ `s3://` แทน
+- ทดสอบ: `make dev-up && make test-presigned` (เซ็น URL ด้วย `scripts/presign-rustfs.sh` แล้วยิง API จริง รวมกรณี URL หมดอายุ/signature ผิด/ไม่เซ็น); JUnit: `PresignedUrlTest`
+
+
 ### Subreport — รองรับ 2 แบบ
 
 1. **แนะนำ:** ประกาศ `<parameter name="SUBREPORTS" class="java.util.Map"/>` แล้วเรียก `((net.sf.jasperreports.engine.JasperReport)$P{SUBREPORTS}.get("sub_diag"))` — API compile `sub_diag.jrxml` ในโฟลเดอร์เดียวกันเมื่อถูกเรียกครั้งแรกและเก็บไว้ ไม่ต้องส่ง `subReports`

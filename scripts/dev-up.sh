@@ -22,6 +22,7 @@ S3_ENDPOINT=http://rustfs:9000
 S3_ACCESS_KEY=rustfsadmin
 S3_SECRET_KEY=rustfsadmin
 S3_ALLOWED_BUCKETS=reports
+HTTP_ALLOWED_HOSTS=rustfs
 API_PORT=$port
 ENV
   echo "$key" > .dev-api-key
@@ -51,5 +52,6 @@ Ready. Try it:
     -o demo.pdf && open demo.pdf
 
 (the same report from the mounted folder: "url":"demo/demo.jrxml")
+Temporary (presigned) URL instead of API-side S3 access:  make test-presigned
 Stop with: make dev-down
 OUT

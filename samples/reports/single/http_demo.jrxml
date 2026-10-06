@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- One self-contained file (no $R{}, sub-report or image): what a presigned URL can hand over by itself. -->
+<jasperReport name="http_demo" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a2001">
+	<property name="report.datasource" value="opd"/>
+	<parameter name="hn" class="java.lang.String"/>
+	<query language="sql"><![CDATA[select hn, name from patient where hn = $P{hn}]]></query>
+	<field name="hn" class="java.lang.String"/>
+	<field name="name" class="java.lang.String"/>
+	<title height="80">
+		<element kind="textField" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a2002" x="0" y="0" width="555" height="36" hTextAlign="Center" fontName="TH Sarabun New" fontSize="22" bold="true">
+			<expression><![CDATA["รายงานทดสอบ presigned URL"]]></expression>
+		</element>
+		<element kind="textField" uuid="5b0f1a64-0b1e-4c5e-9d11-6a0d2d3a2003" x="0" y="40" width="555" height="24" fontName="TH Sarabun New" fontSize="18">
+			<expression><![CDATA["ผู้ป่วย: " + $F{name} + "  HN " + $F{hn}]]></expression>
+		</element>
+	</title>
+</jasperReport>

@@ -178,7 +178,7 @@ class HttpBundleSource {
             digest.update((name + "|" + Hashing.hex(content, 16) + "\n").getBytes(StandardCharsets.UTF_8));
         });
         String version = Hashing.hex(digest, 16);
-        String identity = mainUrl + subReports.stream().map(SubReportSource::url).toList();
+        String identity = identityOf(mainUrl) + subReports.stream().map(s -> identityOf(s.url())).toList();
         Path bundleRoot = workDir.resolve(Hashing.hex(identity, 12));
         Path target = bundleRoot.resolve(version);
         try {
@@ -203,6 +203,23 @@ class HttpBundleSource {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "cannot store downloaded report: " + e.getMessage(), e);
         }
         return new ResolvedBundle("http:" + Hashing.hex(identity, 16), target, "main.jrxml", version);
+    }
+
+    /**
+     * The URL without query and fragment. A pre-signed URL names the same object but carries a new signature and
+     * expiry on every request; keyed by the full URL each request would get its own bundle id (so a recompile) and
+     * its own folder under the work dir. The version is a hash of the content, so editing the object still shows.
+     */
+    static String identityOf(String url) {
+        try {
+            URI uri = URI.create(url.trim());
+            if (uri.getScheme() == null || uri.getRawAuthority() == null) {
+                return url.trim();
+            }
+            return uri.getScheme().toLowerCase(Locale.ROOT) + "://" + uri.getRawAuthority() + (uri.getRawPath() == null ? "" : uri.getRawPath());
+        } catch (IllegalArgumentException e) {
+            return url.trim();
+        }
     }
 
     private URI checkedUri(String url) {
