@@ -62,4 +62,4 @@ git add pom.xml
 git commit -q -m "chore: start $NEXT"
 
 git push --atomic origin main "$TAG"
-echo "pushed $TAG; follow the build with: gh run watch"
+echo "pushed $TAG; follow the build with: gh run list --workflow=release.yml (then gh run watch <id>)"
