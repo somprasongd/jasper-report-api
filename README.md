@@ -105,6 +105,7 @@ Base path คือ `/api`
 | `mainReport.name` | ไม่ | ใช้ตั้งชื่อไฟล์ผลลัพธ์ถ้าไม่ส่ง `fileName` (ไม่ส่ง = ชื่อไฟล์ JRXML) |
 | `mainReport.modified_at` | ไม่ | รับไว้เพื่อให้เข้ากับ `jasperreports-pdf` แต่ **ไม่ใช้** (API ดูการเปลี่ยนแปลงของไฟล์เอง) |
 | `datasource` | ไม่ | ชื่อ datasource เชิงตรรกะ ดู [การเลือก datasource](#การเลือก-datasource) |
+| `data` | ไม่ | JSON ที่รายงานแบบ `<query language="json">` อ่านแทนฐานข้อมูล ดู [รายงานแบบไม่ใช้ฐานข้อมูล](#รายงานแบบไม่ใช้ฐานข้อมูล-none-และ-json) — ส่งคู่กับ `datasource` ไม่ได้ |
 | `tenant` | ไม่ | ไม่ส่ง = `default`; header `X-Tenant-Id` ชนะค่าใน body |
 | `subReports[]` | ไม่ | `{"name": "sub_x", "url": "..."}` — **รายงาน http(s) ต้องระบุ subreport ทุกตัวที่ใช้** (ดาวน์โหลดมาเก็บเป็น `sub_x.jrxml` ในชุดเดียวกับรายงานหลัก) ส่วนโฟลเดอร์/S3 ไม่ต้องส่ง (มีอยู่ในโฟลเดอร์แล้ว) ยกเว้นแบบ `SUBREPORT_DIR` ที่ใช้เลือก subreport ที่จะ compile (ไม่ระบุ = ทุก `*.jrxml` ในโฟลเดอร์) |
 | `parameters[].name` / `value` | ใช่ | ค่า parameter ดู [ชนิดของ parameter](#ชนิดของ-parameter) |
@@ -132,6 +133,10 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `TENANT_UNKNOWN`, `DATASOURCE_UNKNOWN` | 400 | ชื่อไม่มีใน config |
 | `DATASOURCE_UNRESOLVED` | 400 | ไม่มี datasource ทั้งใน request, JRXML และค่า default |
 | `DATASOURCE_OVERRIDE_DENIED` | 400 | request ไม่ตรงกับ JRXML และปิด override ไว้ |
+| `DATASOURCE_NONE_NOT_ALLOWED` | 400 | ใช้ `datasource: "none"` กับรายงานที่มี `<query>` |
+| `DATA_AND_DATASOURCE` | 400 | ส่งทั้ง `data` และ `datasource` |
+| `DATA_NOT_SUPPORTED` | 400 | ส่ง `data` แต่รายงานไม่มี `<query language="json">` |
+| `DATA_TOO_LARGE` | 413 | `data` เกิน `report.limits.max-data-size` |
 | `SOURCE_NOT_ALLOWED` | 400 | path/bucket/host/scheme ไม่ได้รับอนุญาต หรือพยายามออกนอกโฟลเดอร์ |
 | `PARAMETER_INVALID` | 400 | แปลงค่า parameter ไม่ได้ (ระบุชื่อ parameter) |
 | `FORMAT_UNSUPPORTED` | 400 | `format` ที่ยังไม่รองรับ |
@@ -387,6 +392,44 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 - ชื่อที่ไม่รู้จักได้ 400 (ต่างจาก `jasperreports-pdf` ที่ตกไปใช้ IPD เงียบๆ)
 - datasource ที่ไม่ตั้ง `url` (เช่น ตัวแปร `IPD_DB_URL` ว่าง) ถือว่าไม่ได้ตั้งค่า
 
+### รายงานแบบไม่ใช้ฐานข้อมูล (`none` และ JSON)
+
+**`none` — ฟอร์ม/template ที่ไม่มี query** ส่ง `"datasource": "none"` (หรือประกาศ `<property name="report.datasource" value="none"/>` ใน JRXML) แล้ว API จะ fill ด้วยข้อมูลว่าง 1 แถวโดยไม่เปิด connection ใดๆ เหมาะกับแบบฟอร์มเปล่า ใบสมัคร หรือรายงานที่แสดงแค่ parameter ถ้าไม่มี datasource ระบุเลย (ไม่มีทั้งใน request, JRXML และ default ของ tenant) และรายงานไม่มี `<query>` ก็ทำงานแบบ `none` เช่นกัน — กรณีนี้ server ไม่ต้องมี tenant หรือ DB เลย
+
+- รายงานที่มี `<query>` ใช้ `none` ไม่ได้ (400 `DATASOURCE_NONE_NOT_ALLOWED`) เพื่อไม่ให้ได้ผลลัพธ์ว่างโดยไม่รู้ตัว
+- `none` เป็นชื่อสงวน: datasource ที่ตั้งชื่อ `none` ใน config จะถูกข้ามพร้อม WARN
+- รายงานที่มี subreport แบบ SQL แต่ตัวหลักไม่มี query ให้ใช้ datasource จริงตามเดิม (subreport ใช้ connection ของรายงานหลัก)
+
+**`data` — ส่ง JSON มา render** ใส่ JSON ในฟิลด์ `data` ของ request แล้วให้รายงานใช้ query แบบ JSON อ่าน:
+
+```json
+{
+  "mainReport": { "url": "opd/patients.jrxml" },
+  "data": { "patients": [ { "name": "สมชาย", "visits": 2 }, { "name": "สมหญิง", "visits": 5 } ] }
+}
+```
+
+```xml
+<property name="net.sf.jasperreports.json.date.pattern" value="yyyy-MM-dd"/>
+<property name="net.sf.jasperreports.json.number.pattern" value="#0.##"/>
+<query language="json"><![CDATA[patients]]></query>
+<field name="name" class="java.lang.String">
+    <property name="net.sf.jasperreports.json.field.expression" value="name"/>
+</field>
+```
+
+- `<query>` คือเส้นทางไปยังอาร์เรย์ใน JSON ส่วน field ระบุเส้นทางสัมพัทธ์ด้วย `net.sf.jasperreports.json.field.expression` (หรือ `<description>`)
+- `data` กับ `datasource` ส่งคู่กันไม่ได้ (400 `DATA_AND_DATASOURCE`) และรายงานที่ไม่มี `<query language="json">` จะได้ 400 `DATA_NOT_SUPPORTED`
+- ค่าวันที่/ตัวเลขใน JSON มาเป็นสตริงได้ ตั้งรูปแบบด้วย property ข้างบน (ระดับรายงาน) มิฉะนั้นแปลงชนิดไม่ตรง
+- ขนาดสูงสุดตั้งด้วย `report.limits.max-data-size` (ค่าเริ่มต้น `10MB`) และเนื้อ JSON **ไม่ถูก log** เช่นเดียวกับ parameter
+- parameter `JSON_INPUT_STREAM` / `JSON_SOURCE` เป็นของ API: client ส่งมาเองไม่ได้ จึงชี้ query ไปที่ไฟล์หรือ URL ของ server ไม่ได้
+- subreport ที่ใช้ข้อมูลชุดเดียวกันให้ส่งต่อจากรายงานหลักด้วย `((net.sf.jasperreports.json.data.JsonDataSource)$P{REPORT_DATA_SOURCE}).subDataSource("เส้นทาง")` (ยังไม่มีเทสต์ครอบคลุมกรณี subreport)
+- `POST /api/v1/reports/validate` รับ `data` เหมือนกัน และจะรายงาน `datasource.resolved` เป็น `json` หรือ `none`
+
+### เพิ่ม DB ใหม่
+
+PostgreSQL: เพิ่มใน YAML ได้เลย (ไม่ต้องแก้โค้ด) เช่น `tenants.default.datasources.lab.url: jdbc:postgresql://...` DB ชนิดอื่นต้องเพิ่ม JDBC driver ใน `pom.xml` ก่อน และ `statement_timeout` (`report.limits.query-timeout`) ใช้ได้เฉพาะ PostgreSQL
+
 ### หลาย tenant / หลาย DB
 
 ใช้ YAML: คัดลอก [config/application.example.yml](config/application.example.yml) เป็น `config/application.yml` แล้ว mount ที่ `/app/config` (เปิดบรรทัดใน `compose.yaml`) Tenant เลือกด้วย header `X-Tenant-Id` หรือ `tenant` ใน body — ถ้าติดตั้งทีละที่ ใช้ `tenants.default` ตัวเดียวก็พอ (ตั้งผ่าน `OPD_DB_*`/`IPD_DB_*` ใน `.env`)
@@ -557,6 +600,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 | `report.limits.fill-timeout` | `60s` | เวลา fill สูงสุด (ตัดด้วย governor ของ JasperReports) |
 | `report.limits.query-timeout` | `30s` | PostgreSQL `statement_timeout` ของ connection |
 | `report.limits.max-pages` | `500` | จำนวนหน้าสูงสุด |
+| `report.limits.max-data-size` | `10MB` | ขนาดสูงสุดของ `data` (JSON) ใน request ตรวจหลังแปลง JSON แล้ว |
 | `report.sources.max-bytes` | `5MB` | ขนาดสูงสุดของแต่ละไฟล์ที่ดึงผ่าน http(s) |
 | `report.sources.http.timeout` | `10s` | timeout ต่อการดาวน์โหลดหนึ่งครั้ง |
 | `report.sources.http.parallelism` | `8` | จำนวนดาวน์โหลด http(s) ที่ยิงพร้อมกันทั้งระบบ |
@@ -581,7 +625,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 54 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # 70 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

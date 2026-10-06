@@ -1,0 +1,8 @@
+<jasperReport name="none_demo" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0011">
+	<parameter name="title" class="java.lang.String"/>
+	<title height="40">
+		<element kind="textField" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0012" x="0" y="0" width="555" height="30" fontName="TH Sarabun New" fontSize="18">
+			<expression><![CDATA["แบบฟอร์มเปล่า: " + $P{title}]]></expression>
+		</element>
+	</title>
+</jasperReport>

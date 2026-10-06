@@ -12,6 +12,7 @@ import com.github.somprasongd.jasperreport.api.web.ApiException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import net.sf.jasperreports.engine.DefaultJasperReportsContext;
+import net.sf.jasperreports.engine.JREmptyDataSource;
 import net.sf.jasperreports.engine.JRException;
 import net.sf.jasperreports.engine.JRParameter;
 import net.sf.jasperreports.engine.JasperFillManager;
@@ -23,15 +24,17 @@ import net.sf.jasperreports.pdf.JRPdfExporter;
 import net.sf.jasperreports.export.SimpleExporterInput;
 import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
 import net.sf.jasperreports.governors.MaxPagesGovernorException;
+import net.sf.jasperreports.json.query.JsonQueryExecuterFactory;
 import net.sf.jasperreports.governors.TimeoutGovernorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import javax.sql.DataSource;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -83,7 +86,7 @@ public class RenderService {
         if (!format.equals("pdf")) {
             throw ApiException.badRequest("FORMAT_UNSUPPORTED", "format '" + request.format() + "' is not supported (only pdf)");
         }
-        String tenant = datasources.resolveTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
+        String tenant = datasources.requestedTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
         String reportName = "unknown";
         String datasourceName = "unknown";
         String outcome = "error";
@@ -94,15 +97,14 @@ public class RenderService {
                     localeSelector.hints(request.locale()));
             reportName = stripExtension(bundle.mainFile());
             JasperReport report = compiler.main(bundle);
-            datasourceName = selector.select(tenant, request.datasource(),
-                    report.getProperty(DatasourceSelector.REPORT_PROPERTY), reportName);
-            DataSource dataSource = datasources.get(tenant, datasourceName);
+            DataPlan plan = selector.plan(tenant, request, report, reportName);
+            datasourceName = plan.datasource();
             Locale locale = localeSelector.select(request.locale(), report.getProperty(LocaleSelector.REPORT_PROPERTY));
 
             Map<String, Object> params = new HashMap<>(binder.bind(report, request.parameters()));
             addSystemParameters(params, report, bundle, request, locale);
 
-            JasperPrint print = fill(report, params, dataSource, tenant, datasourceName, bundle);
+            JasperPrint print = fill(report, params, plan, request, tenant, bundle);
             byte[] pdf = exportPdf(print);
             outcome = "success";
             return new RenderResult(pdf, PDF, fileName(request, reportName), bundle.version(), locale.toLanguageTag());
@@ -170,8 +172,9 @@ public class RenderService {
         return bundle.dir() + File.separator;
     }
 
-    private JasperPrint fill(JasperReport report, Map<String, Object> params, DataSource dataSource, String tenant, String datasourceName,
+    private JasperPrint fill(JasperReport report, Map<String, Object> params, DataPlan plan, RenderRequest request, String tenant,
                              ResolvedBundle bundle) {
+        String datasourceName = plan.datasource();
         LocalJasperReportsContext context = new LocalJasperReportsContext(DefaultJasperReportsContext.getInstance());
         ReportProperties.Limits limits = properties.limits();
         // message bundles next to the JRXML: JasperReports looks resources up through the thread class loader first
@@ -182,8 +185,21 @@ public class RenderService {
         context.setProperty("net.sf.jasperreports.governor.timeout", String.valueOf(limits.fillTimeout().toMillis()));
         context.setProperty("net.sf.jasperreports.governor.max.pages.enabled", "true");
         context.setProperty("net.sf.jasperreports.governor.max.pages", String.valueOf(limits.maxPages()));
-        try (Connection connection = dataSource.getConnection()) {
-            return JasperFillManager.getInstance(context).fill(report, params, connection);
+        try {
+            JasperFillManager filler = JasperFillManager.getInstance(context);
+            return switch (plan.kind()) {
+                case DATABASE -> {
+                    try (Connection connection = datasources.get(tenant, datasourceName).getConnection()) {
+                        yield filler.fill(report, params, connection);
+                    }
+                }
+                // one empty record, so the title/detail bands of a report without a query print once
+                case NONE -> filler.fill(report, params, new JREmptyDataSource());
+                case JSON -> {
+                    params.put(JsonQueryExecuterFactory.JSON_INPUT_STREAM, new ByteArrayInputStream(jsonBytes(request)));
+                    yield filler.fill(report, params);
+                }
+            };
         } catch (SQLException e) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "DATABASE_ERROR",
                     "database '" + tenant + "/" + datasourceName + "' failed: " + rootMessage(e), e);
@@ -192,6 +208,16 @@ public class RenderService {
         } finally {
             JRResourcesUtil.resetClassLoader();
         }
+    }
+
+    private byte[] jsonBytes(RenderRequest request) {
+        byte[] bytes = request.data().toString().getBytes(StandardCharsets.UTF_8);
+        long max = properties.limits().maxDataSize().toBytes();
+        if (bytes.length > max) {
+            throw new ApiException(HttpStatus.CONTENT_TOO_LARGE, "DATA_TOO_LARGE",
+                    "'data' is " + bytes.length + " bytes, the limit is " + max + " (report.limits.max-data-size)");
+        }
+        return bytes;
     }
 
     private ApiException mapFillFailure(Throwable failure, String tenant, String datasourceName) {

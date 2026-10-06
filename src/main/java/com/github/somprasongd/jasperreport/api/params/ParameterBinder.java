@@ -42,7 +42,9 @@ public class ParameterBinder {
             "REPORT_VIRTUALIZER", "REPORT_LOCALE", "REPORT_TIME_ZONE", "REPORT_PARAMETERS_MAP",
             "REPORT_DATA_SOURCE", "REPORT_CONTEXT", "REPORT_CLASS_LOADER", "REPORT_SCRIPTLET",
             "REPORT_RESOURCE_BUNDLE", "REPORT_MAX_COUNT", "REPORT_FORMAT_FACTORY", "REPORT_URL_HANDLER_FACTORY",
-            "REPORT_FILE_RESOLVER", "IS_IGNORE_PAGINATION", "JASPER_REPORT", "REPORT_TEMPLATES");
+            "REPORT_FILE_RESOLVER", "IS_IGNORE_PAGINATION", "JASPER_REPORT", "REPORT_TEMPLATES",
+            // the JSON query executor reads these; the request's `data` is the only way a client feeds it
+            "JSON_INPUT_STREAM", "JSON_SOURCE");
 
     private static final Logger log = LoggerFactory.getLogger(ParameterBinder.class);
 

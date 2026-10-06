@@ -7,7 +7,13 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+### Added
+- Render without a database: `datasource: "none"` (or no datasource at all for a report that has no `<query>`) fills with one empty record, so blank forms and parameter-only reports need no tenant or DB.
+- `data` field in render and validate requests: JSON read by a report's `<query language="json">` instead of a database. Limited by `report.limits.max-data-size` (default 10MB); not logged. New error codes `DATA_AND_DATASOURCE`, `DATA_NOT_SUPPORTED`, `DATA_TOO_LARGE` and `DATASOURCE_NONE_NOT_ALLOWED`.
+- `jasperreports-json` dependency.
+
 ### Changed
+- `JSON_INPUT_STREAM` and `JSON_SOURCE` report parameters can no longer be set by a client.
 - Release workflow actions upgraded to their Node 24 versions.
 
 ## [0.1.0] - 2026-10-06

@@ -55,7 +55,7 @@ public class ReportInspector {
     }
 
     public Map<String, Object> inspect(RenderRequest request, String tenantHeader) {
-        String tenant = datasources.resolveTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
+        String tenant = datasources.requestedTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
         ResolvedBundle bundle = sources.resolve(request.mainReport().url(),
                 com.github.somprasongd.jasperreport.api.render.RenderService.subReportSources(request.subReports()),
                 localeSelector.hints(request.locale()));
@@ -65,7 +65,7 @@ public class ReportInspector {
         String fromFile = report.getProperty(DatasourceSelector.REPORT_PROPERTY);
         String resolved = null;
         try {
-            resolved = selector.select(tenant, request.datasource(), fromFile, bundle.mainFile());
+            resolved = selector.plan(tenant, request, report, bundle.mainFile()).datasource();
         } catch (RuntimeException e) {
             warnings.add("datasource: " + e.getMessage());
         }

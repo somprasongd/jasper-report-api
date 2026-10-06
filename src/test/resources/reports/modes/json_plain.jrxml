@@ -1,0 +1,18 @@
+<jasperReport name="json_plain" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0021">
+	<property name="net.sf.jasperreports.json.date.pattern" value="yyyy-MM-dd"/>
+	<property name="net.sf.jasperreports.json.number.pattern" value="#0.##"/>
+	<query language="json"><![CDATA[patients]]></query>
+	<field name="name" class="java.lang.String">
+		<property name="net.sf.jasperreports.json.field.expression" value="name"/>
+	</field>
+	<field name="visits" class="java.lang.Integer">
+		<property name="net.sf.jasperreports.json.field.expression" value="visits"/>
+	</field>
+	<detail>
+		<band height="34">
+			<element kind="textField" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0022" x="0" y="0" width="555" height="30" fontName="TH Sarabun New" fontSize="16">
+				<expression><![CDATA[$F{name} + " มา " + $F{visits} + " ครั้ง"]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

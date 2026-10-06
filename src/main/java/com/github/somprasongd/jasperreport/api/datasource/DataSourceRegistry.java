@@ -1,6 +1,7 @@
 package com.github.somprasongd.jasperreport.api.datasource;
 
 import com.github.somprasongd.jasperreport.api.config.ReportProperties;
+import com.github.somprasongd.jasperreport.api.render.DataPlan;
 import com.github.somprasongd.jasperreport.api.web.ApiException;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -43,7 +44,9 @@ public class DataSourceRegistry {
             // a datasource whose url is empty (e.g. an unset environment variable) is treated as not configured
             Map<String, TenantProperties.DatasourceProperties> usable = new LinkedHashMap<>();
             tenant.datasources().forEach((dsName, ds) -> {
-                if (ds.url() != null && !ds.url().isBlank()) {
+                if (DataPlan.isNone(dsName)) {
+                    log.warn("tenants.{}.datasources.{} ignored: '{}' is reserved for \"no database\"", name, dsName, DataPlan.NONE_NAME);
+                } else if (ds.url() != null && !ds.url().isBlank()) {
                     usable.put(dsName, ds);
                 }
             });
@@ -68,9 +71,18 @@ public class DataSourceRegistry {
         return tenant;
     }
 
+    /**
+     * The tenant a request names; a request that names none gets {@code default} without checking it exists, so a
+     * render that needs no database works on a server with no tenants at all.
+     */
+    public String requestedTenant(String requested) {
+        return requested == null || requested.isBlank() ? DEFAULT_TENANT : resolveTenant(requested);
+    }
+
     /** @return the tenant's default datasource name, or null when none is configured. */
     public String defaultDatasource(String tenant) {
-        return tenants.get(tenant).defaultDatasource();
+        TenantProperties props = tenants.get(tenant);
+        return props == null ? null : props.defaultDatasource();
     }
 
     public boolean exists(String tenant, String name) {

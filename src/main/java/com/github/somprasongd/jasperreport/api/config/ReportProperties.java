@@ -73,7 +73,9 @@ public record ReportProperties(
             @DefaultValue("10s") Duration queueWait,
             @DefaultValue("60s") Duration fillTimeout,
             @DefaultValue("30s") Duration queryTimeout,
-            @DefaultValue("500") int maxPages) {
+            @DefaultValue("500") int maxPages,
+            /** Largest {@code data} (JSON) a render request may carry. */
+            @DefaultValue("10MB") DataSize maxDataSize) {
     }
 
     public record Security(@DefaultValue ApiKey apiKey, @DefaultValue List<ApiKeyEntry> apiKeys) {

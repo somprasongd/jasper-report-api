@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import tools.jackson.databind.JsonNode;
+
 import java.util.List;
 
 /**
@@ -20,7 +22,9 @@ public record RenderRequest(
         String format,
         String fileName,
         /** Language tag (th, en, th-TH, ...). Wins over the report's own default. */
-        String locale) {
+        String locale,
+        /** JSON the report's {@code <query language="json">} reads instead of a database. Excludes {@code datasource}. */
+        JsonNode data) {
 
     public record ReportRef(String name, @NotBlank String url, Long modified_at) {
 
