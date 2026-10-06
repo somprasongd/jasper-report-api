@@ -7,6 +7,8 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-06
+
 First release.
 
 ### Added
@@ -22,4 +24,5 @@ First release.
 - Docker image and a one-command demo (`make dev-up`) with PostgreSQL sample data and rustfs.
 - Release workflow: a `v*` tag builds the jar, publishes the image to GHCR and creates a GitHub Release.
 
-[Unreleased]: https://github.com/somprasongd/jasper-report-api/commits/main
+[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/somprasongd/jasper-report-api/releases/tag/v0.1.0
