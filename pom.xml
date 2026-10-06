@@ -100,10 +100,10 @@
 			<version>${jasperreports.version}</version>
 		</dependency>
 
-		<!-- Thai font extension (TH Sarabun New), byte-identical to automail-checkup-thai-fonts:2.0.0, SHA-256 pinned in libs/font-jar.sha256 -->
+		<!-- Thai font extension (TH Sarabun New), SHA-256 pinned in libs/font-jar.sha256 -->
 		<dependency>
-			<groupId>com.hospitalos</groupId>
-			<artifactId>automail-checkup-thai-fonts</artifactId>
+			<groupId>com.github.somprasongd.jasperreport</groupId>
+			<artifactId>jasper-report-api-thai-fonts</artifactId>
 			<version>2.0.0</version>
 		</dependency>
 

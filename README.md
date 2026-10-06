@@ -211,7 +211,7 @@ reports/opd/medical_certificate/
 
 ### Subreport — รองรับ 2 แบบ
 
-1. **แนะนำ (แบบ automail / checkup-reports):** ประกาศ `<parameter name="SUBREPORTS" class="java.util.Map"/>` แล้วเรียก `((net.sf.jasperreports.engine.JasperReport)$P{SUBREPORTS}.get("sub_diag"))` — API compile `sub_diag.jrxml` ในโฟลเดอร์เดียวกันเมื่อถูกเรียกครั้งแรกและเก็บไว้ ไม่ต้องส่ง `subReports`
+1. **แนะนำ:** ประกาศ `<parameter name="SUBREPORTS" class="java.util.Map"/>` แล้วเรียก `((net.sf.jasperreports.engine.JasperReport)$P{SUBREPORTS}.get("sub_diag"))` — API compile `sub_diag.jrxml` ในโฟลเดอร์เดียวกันเมื่อถูกเรียกครั้งแรกและเก็บไว้ ไม่ต้องส่ง `subReports`
 2. **แบบเดิม (แบบ pdf):** ประกาศ `<parameter name="SUBREPORT_DIR" class="java.lang.String"/>` และใช้ `$P{SUBREPORT_DIR} + "sub_diag.jasper"` — API compile subreport เป็น `.jasper` ลง `report.cache.work-dir` ให้และตั้ง `SUBREPORT_DIR` ให้
 
 ---
@@ -247,10 +247,10 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 
 ### ฟอนต์ไทย
 
-ใช้ฟอนต์ **`TH Sarabun New`** (`fontName="TH Sarabun New"`) — ฝังใน PDF อัตโนมัติ ฟอนต์นี้มาจาก jar `automail-checkup-thai-fonts:2.0.0` (ไฟล์เดียวกับ automail ทุก byte, SHA-256 ล็อกใน [libs/font-jar.sha256](libs/font-jar.sha256) และมีเทสต์ตรวจ) license เป็น GPL-2.0-or-later พร้อม font-embedding exception (อยู่ใน `META-INF/LICENSES` ของ jar)
+ใช้ฟอนต์ **`TH Sarabun New`** (`fontName="TH Sarabun New"`) — ฝังใน PDF อัตโนมัติ ฟอนต์นี้มาจาก jar `jasper-report-api-thai-fonts:2.0.0` (SHA-256 ล็อกใน [libs/font-jar.sha256](libs/font-jar.sha256) และมีเทสต์ตรวจ) license เป็น GPL-2.0-or-later พร้อม font-embedding exception (อยู่ใน `META-INF/LICENSES` ของ jar)
 
-- **ไม่มี** `TH SarabunPSK` (license ของ DIP&SIPA จำกัดการแจกจ่าย) และฟอนต์อื่นจาก `hosos-jasperreports-font` — JRXML ที่ใช้ฟอนต์เหล่านี้ให้เปลี่ยนเป็น `TH Sarabun New` (automail ทำแบบนี้แล้ว layout ไม่เปลี่ยน) ฟอนต์ที่ไม่มี **ทำให้ render ไม่ผ่าน** ไม่ใช่แสดงผิดเงียบๆ และ `/validate` บอกชื่อฟอนต์ที่ขาด
-- การเปลี่ยน jar ฟอนต์ต้องขออนุมัติการแจกจ่ายใหม่ (การอนุมัติของ automail ผูกกับ SHA-256 นี้)
+- **ไม่มี** `TH SarabunPSK` (license ของ DIP&SIPA จำกัดการแจกจ่าย) และฟอนต์อื่นจาก `hosos-jasperreports-font` — JRXML ที่ใช้ฟอนต์เหล่านี้ให้เปลี่ยนเป็น `TH Sarabun New` ฟอนต์ที่ไม่มี **ทำให้ render ไม่ผ่าน** ไม่ใช่แสดงผิดเงียบๆ และ `/validate` บอกชื่อฟอนต์ที่ขาด
+- การเปลี่ยน jar ฟอนต์ต้องขออนุมัติการแจกจ่ายใหม่ (การอนุมัติผูกกับ SHA-256 นี้)
 
 ### Barcode และ QR code
 
@@ -276,7 +276,7 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 
 ### รูปภาพ
 
-`IMAGE_DIR` (และ `REPORT_ASSETS_DIR` แบบ automail) ชี้ไปที่ `assets/` ในโฟลเดอร์ของรายงาน (ถ้าไม่มี ใช้ `report.sources.images-dir` ถ้าตั้งไว้ ไม่เช่นนั้นใช้โฟลเดอร์ของรายงาน) ประกาศ `<parameter name="IMAGE_DIR" class="java.lang.String"/>` แล้วใช้ `$P{IMAGE_DIR} + "logo.png"` รูปที่ไม่มีไฟล์ทำให้ render ผิดพลาด (500)
+`IMAGE_DIR` (และ `REPORT_ASSETS_DIR`) ชี้ไปที่ `assets/` ในโฟลเดอร์ของรายงาน (ถ้าไม่มี ใช้ `report.sources.images-dir` ถ้าตั้งไว้ ไม่เช่นนั้นใช้โฟลเดอร์ของรายงาน) ประกาศ `<parameter name="IMAGE_DIR" class="java.lang.String"/>` แล้วใช้ `$P{IMAGE_DIR} + "logo.png"` รูปที่ไม่มีไฟล์ทำให้ render ผิดพลาด (500)
 
 ### ภาษาของ expression
 

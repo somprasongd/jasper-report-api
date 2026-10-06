@@ -10,8 +10,8 @@ import java.util.HexFormat;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The font jar must stay byte-identical to automail-checkup-thai-fonts:2.0.0: the distribution approval of the
- * TH Sarabun New font is bound to this SHA-256 (see docs/design, section 9). Changing the jar needs a new approval.
+ * The font jar (jasper-report-api-thai-fonts:2.0.0) is pinned by SHA-256: the distribution approval of the
+ * TH Sarabun New font is bound to it (see docs/design, section 9). Changing the jar needs a new approval.
  */
 class FontJarPinTest {
 

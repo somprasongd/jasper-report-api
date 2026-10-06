@@ -2,7 +2,7 @@
 
 > สถานะ: **Phase 1 implemented** — 2026-10-06 (รายละเอียดที่ต่างจากแผนและผลการทดสอบอยู่ที่ [§18](#18-ผลการ-implement-phase-1)); วิธีใช้งานอยู่ใน [README](../../README.md)
 > ต่อยอดจาก: [`jasperreports-pdf`](../../jasperreports-pdf) (ดูผลเปรียบเทียบใน [project-comparison](../project-comparison/jasperreports-generater-vs-jasperreports-pdf.md))
-> อ้างอิงแนวทางฟอนต์/JasperReports 7 จาก: `hosos/tools/kvpo/automail-checkup` (ADR-0003, ADR-0012, font extension `automail-checkup-thai-fonts:2.0.0`)
+> font extension ของโปรเจกต์นี้: `jasper-report-api-thai-fonts:2.0.0` (TH Sarabun New)
 
 สัญลักษณ์ในเอกสาร: ✅ = ตรวจแล้วจาก artifact/โค้ดจริง, ⚠️ = ยังต้องยืนยันใน PoC
 
@@ -18,7 +18,7 @@
 - รองรับหลาย tenant (หลายโรงพยาบาล) แต่ไม่บังคับ — deployment แบบหนึ่ง instance ต่อหนึ่งที่ใช้ tenant `default` ได้เลย
 
 **นอกขอบเขต (ตอนนี้)**
-- อัปโหลด/แก้ JRXML ผ่าน API (แก้ที่ storage/โฟลเดอร์โดยตรง เหมือน automail ADR-0003)
+- อัปโหลด/แก้ JRXML ผ่าน API (แก้ที่ storage/โฟลเดอร์โดยตรง)
 - เปิดให้บริการนอกเครือข่ายภายใน
 - UI ออกแบบรายงาน
 
@@ -36,10 +36,10 @@
 | D4 | การเลือก datasource | ลำดับ: **request > property ใน JRXML > default ของ tenant**; ถ้า request ไม่ตรงกับ JRXML → **request ชนะ** + log WARN + metric (ปิดได้ด้วย config) |
 | D5 | แหล่ง JRXML | path ในโฟลเดอร์ที่ mount, `s3://bucket/key`, หรือ `https://` เฉพาะ host ใน allowlist (ค่าเริ่มต้นปิด) |
 | D6 | Cache/version | ใช้ ETag (S3) / mtime+size (ไฟล์) ของต้นทางเป็น version; เก็บ `JasperReport` ใน memory; ไม่ใช้ `modified_at` จาก client (รับแต่ไม่สนใจ) |
-| D7 | Subreport | ทั้งแบบใหม่ `SUBREPORTS` (Map ของ report ที่ compile แล้ว แบบ automail) และแบบเดิม `SUBREPORT_DIR` |
+| D7 | Subreport | ทั้งแบบใหม่ `SUBREPORTS` (Map ของ report ที่ compile แล้ว) และแบบเดิม `SUBREPORT_DIR` |
 | D8 | Parameter | แปลงตามชนิดที่ประกาศใน JRXML; `type` จาก client เป็น optional (เข้ากันได้กับ pdf) |
-| D9 | Engine | **JasperReports 7.0.8** (ยืนยันแล้ว 2026-10-06; ตรงกับ automail/checkup-reports) — JRXML รูปแบบ 6.x ต้องแปลงก่อนใช้ (ดู §13, Q1) |
-| D10 | ฟอนต์ | ใช้ font extension **TH Sarabun New เท่านั้น** (GPL-2.0+ พร้อม font embedding exception) jar เดียวกับ automail; ไม่รวม TH SarabunPSK และฟอนต์ที่ไม่มีเอกสาร license |
+| D9 | Engine | **JasperReports 7.0.8** (ยืนยันแล้ว 2026-10-06) — JRXML รูปแบบ 6.x ต้องแปลงก่อนใช้ (ดู §13, Q1) |
+| D10 | ฟอนต์ | ใช้ font extension **TH Sarabun New เท่านั้น** (GPL-2.0+ พร้อม font embedding exception) jar `jasper-report-api-thai-fonts`; ไม่รวม TH SarabunPSK และฟอนต์ที่ไม่มีเอกสาร license |
 | D11 | Barcode/QR | ใช้ component ของ JasperReports (`jasperreports-barcode4j`: Code128/39, EAN, PDF417, DataMatrix, QRCode) แทนการใช้ฟอนต์ barcode |
 | D12 | ความทนทาน | จำกัด concurrency, timeout, query timeout, จำนวนหน้า, virtualizer สำหรับรายงานใหญ่; โหมด async สำหรับงานยาว (phase 2) |
 
@@ -181,19 +181,19 @@ reports/opd/medical_certificate/
 
 - **version ของ bundle**: S3 → hash ของ (key, ETag) ทุก object ใน prefix จาก `ListObjectsV2` ครั้งเดียว; local → hash ของ (path, mtime, size) ของไฟล์ใน bundle
 - ตรวจ version ไม่บ่อยกว่า `cache.check-interval` (เช่น 10 วินาที) ต่อ bundle
-- ทั้ง render ใช้ bundle version เดียว (pin ตอนเริ่ม) — ป้องกันการผสมไฟล์สองเวอร์ชันระหว่างที่มีคนแก้ไฟล์ (แนวเดียวกับ `MountedReportFiles.pinned()` ของ automail)
+- ทั้ง render ใช้ bundle version เดียว (pin ตอนเริ่ม) — ป้องกันการผสมไฟล์สองเวอร์ชันระหว่างที่มีคนแก้ไฟล์
 - โฟลเดอร์แบบ flat ของ pdf (`jrxmls/*.jrxml` หลายรายงานรวมกัน) ใช้ได้ แต่ **version คิดจากทั้งโฟลเดอร์** (ไฟล์ใดเปลี่ยน รายงานทุกตัวในโฟลเดอร์ compile ใหม่) — แนะนำให้แยกโฟลเดอร์ต่อรายงาน (implement แล้วตามนี้ ไม่ได้คิดเฉพาะไฟล์ที่ถูกใช้ตามที่ร่างไว้ตอนแรก)
 
 ### 5.3 Subreport — รองรับ 2 แบบ
 
 | แบบ | JRXML เขียนว่า | API ทำอะไร |
 |---|---|---|
-| **ใหม่ (แนะนำ)** — แบบ automail/checkup-reports ✅ | `<parameter name="SUBREPORTS" class="java.util.Map"/>` และ expression `((JasperReport)$P{SUBREPORTS}.get("sub_diag"))` | ส่ง Map แบบ lazy: `get("x")` จะ compile `x.jrxml` ใน bundle ครั้งแรกแล้ว cache ไว้; ไม่ต้องเขียน `.jasper` ลงดิสก์; ไม่ต้องให้ client ระบุ `subReports` |
+| **ใหม่ (แนะนำ)** ✅ | `<parameter name="SUBREPORTS" class="java.util.Map"/>` และ expression `((JasperReport)$P{SUBREPORTS}.get("sub_diag"))` | ส่ง Map แบบ lazy: `get("x")` จะ compile `x.jrxml` ใน bundle ครั้งแรกแล้ว cache ไว้; ไม่ต้องเขียน `.jasper` ลงดิสก์; ไม่ต้องให้ client ระบุ `subReports` |
 | **เดิม** — แบบ pdf | `$P{SUBREPORT_DIR} + "sub_diag.jasper"` | compile subreport (จาก `subReports[]` หรือทุก `*.jrxml` ใน bundle ถ้าไม่ระบุ) เขียนเป็น `.jasper` ลง `cache/<bundle-hash>/<version>/` แบบ temp + atomic rename แล้วตั้ง `SUBREPORT_DIR` ไปที่โฟลเดอร์นั้น; ลบเวอร์ชันเก่าเป็นระยะ |
 
 ### 5.4 รูปภาพ
 
-- `IMAGE_DIR` (แบบ pdf) และ `REPORT_ASSETS_DIR` (แบบ automail) ชี้ไปที่โฟลเดอร์ assets ของ bundle (สำหรับ S3 จะ sync ลง `cache/<bundle-hash>/<version>/assets/` ก่อน)
+- `IMAGE_DIR` (แบบ pdf) และ `REPORT_ASSETS_DIR` ชี้ไปที่โฟลเดอร์ assets ของ bundle (สำหรับ S3 จะ sync ลง `cache/<bundle-hash>/<version>/assets/` ก่อน)
 - `IMAGE_DIR` ส่วนกลาง (เช่น โลโก้โรงพยาบาลของ tenant) ตั้งได้ใน config ของ tenant
 
 ### 5.5 System parameters (client ส่งมาจะถูกตัดทิ้ง + WARN)
@@ -255,7 +255,7 @@ name     = fromReq ?: fromFile ?: tenant.default-datasource        → ไม่
 - compile ไม่ผ่าน → cache ผลผิดพลาดสั้นๆ (เช่น 5 วินาที) กันการ compile ซ้ำถี่ๆ
 - ไม่ persist `.jasper` ยกเว้น subreport แบบ `SUBREPORT_DIR` (§5.3) — เลี่ยงปัญหา `.jasper` ข้ามเวอร์ชัน JasperReports
 - Compiler ✅ (มี module ใน JR 7.0.8):
-  - `language="groovy"` ต้องมี `jasperreports-groovy` (automail เคยเจอ JRXML ที่ไม่ระบุ language แล้ว compile ไม่ผ่านบน JRE-only image)
+  - `language="groovy"` ต้องมี `jasperreports-groovy` (เคยเจอ JRXML ที่ไม่ระบุ language แล้ว compile ไม่ผ่านบน JRE-only image)
   - `language="java"` บน JRE image ต้องมี `jasperreports-jdt`
 - ตอน compile ให้ lint: แจ้งเตือนถ้า query มี `$P!{...}` (ต่อ string เข้า SQL = เสี่ยง SQL injection) — แสดงใน `/validate` และ log WARN
 
@@ -295,30 +295,30 @@ log เฉพาะ **ชื่อและชนิด** ของ parameter �
 
 | แหล่ง | ฟอนต์ | เอกสาร license ใน jar |
 |---|---|---|
-| automail `automail-checkup-thai-fonts:2.0.0` ✅ | TH Sarabun New (Regular/Bold/Italic/BoldItalic) | มี: `META-INF/LICENSES/GPL-2.0-or-later.txt`, `TH-Sarabun-New-Font-License-Metadata.txt`, `META-INF/NOTICE` |
+| `jasper-report-api-thai-fonts:2.0.0` ✅ | TH Sarabun New (Regular/Bold/Italic/BoldItalic) | มี: `META-INF/LICENSES/GPL-2.0-or-later.txt`, `TH-Sarabun-New-Font-License-Metadata.txt`, `META-INF/NOTICE` |
 | pdf `hosos-jasperreports-font-1.1.1` ✅ | TH Sarabun New, **TH SarabunPSK**, RSU, RSU TEXT, Arthit, AngsanaDSE, WinAmaraPura, Myanmar Text (`mmrtext.ttf`), **IDAutomationHC39M** (ฟอนต์ barcode Code39) | **ไม่มี** |
 
-ข้อมูลจาก automail:
+ข้อมูลฟอนต์:
 - TH Sarabun New: **GPL-2.0-or-later พร้อม font embedding exception** (ฝังลง PDF แล้ว PDF ไม่ต้องเป็น GPL) — ข้อความ license มาจาก name table ของ TTF เอง
 - TH SarabunPSK ถูกตัดออก เพราะ license ของ DIP&SIPA จำกัดการขายแยกและต้องแจ้งก่อนดัดแปลง
-- การอนุมัติแจกจ่าย image ของ automail **ผูกกับ SHA-256 ของ font jar** (`font-jar-sha256` ใน `checkup-reports.lock`)
+- การอนุมัติแจกจ่าย image **ผูกกับ SHA-256 ของ font jar** (`libs/font-jar.sha256`)
 
 ### 9.2 ข้อตัดสินใจ (D10)
 
-1. **ใช้ jar `automail-checkup-thai-fonts:2.0.0` ตัวเดียวกัน (byte เดิม, ตรวจ SHA-256)** จาก maven-repo ของ release `checkup-reports` เพื่อใช้การอนุมัติ license เดิมร่วมกัน ถ้าจะ build jar ของตัวเอง (เช่น เปลี่ยนชื่อ coordinate) ต้องขออนุมัติใหม่
-   - pin ด้วย lock file + script ตรวจ SHA-256 ตอน build แบบเดียวกับ `scripts/fetch-checkup-reports.sh`
+1. **ใช้ jar `jasper-report-api-thai-fonts:2.0.0` ของโปรเจกต์นี้ (ตรวจ SHA-256)** — บรรจุไฟล์ TTF TH Sarabun New เดิมโดยไม่แก้ไข ต้องขออนุมัติแจกจ่ายตาม SHA-256 นี้
+   - pin ด้วย lock file + script ตรวจ SHA-256 ตอน build (`libs/font-jar.sha256` + `sha256sum -c` ใน Dockerfile)
    - ใส่ jar เป็น dependency ปกติจาก local maven repo (ไม่ใช้ `system` scope แบบ pdf)
 2. font-families ใช้ `pdfEncoding=Identity-H`, `pdfEmbedded=true` (มีอยู่แล้วใน jar) → ภาษาไทยฝังใน PDF ถูกต้อง เปิดได้ทุกเครื่อง
 3. **ไม่รวม** TH SarabunPSK และฟอนต์อื่นใน `hosos-jasperreports-font-1.1.1` จนกว่าจะมีเอกสาร license และการอนุมัติ — `mmrtext.ttf` น่าจะเป็นฟอนต์ที่มากับ Windows (Myanmar Text) ส่วน IDAutomationHC39M เป็นฟอนต์ของผู้ขายเชิงพาณิชย์; ถ้าต้องใช้ในอนาคต ให้แยกเป็น jar ต่างหาก (font pack) พร้อม `META-INF/LICENSES` และการอนุมัติของตัวเอง
 4. ใส่ `jasperreports-fonts` (DejaVu) ไว้เป็นฟอนต์ละติน/ค่าเริ่มต้นสำหรับ element ที่ไม่ระบุ `fontName` (DejaVu ใช้ license แบบ free)
 5. คงค่า `net.sf.jasperreports.awt.ignore.missing.font=false` ให้รายงานที่อ้างฟอนต์ที่ไม่มี **fail ทันที** ไม่ใช่แสดงผิดเงียบๆ — และให้ `/validate` แจ้งชื่อฟอนต์ที่ JRXML อ้างแต่ไม่มีใน extension
 6. JRXML เดิมที่ใช้ `fontName="TH SarabunPSK"`:
-   - **แนะนำ**: เปลี่ยนเป็น `TH Sarabun New` (แบบที่ automail ทำกับ 14 ไฟล์ — layout และจำนวนหน้าไม่เปลี่ยน)
-   - ทางเลือกชั่วคราว: font extension เล็กๆ ที่ map ชื่อ family `TH SarabunPSK` → ไฟล์ TH Sarabun New (ไม่แก้ไฟล์ TTF) เปิดด้วย config — รูปตัวอักษรจะต่างจากต้นฉบับเล็กน้อย ต้องบันทึกเป็น deviation เหมือน automail
+   - **แนะนำ**: เปลี่ยนเป็น `TH Sarabun New` (layout และจำนวนหน้าไม่เปลี่ยน)
+   - ทางเลือกชั่วคราว: font extension เล็กๆ ที่ map ชื่อ family `TH SarabunPSK` → ไฟล์ TH Sarabun New (ไม่แก้ไฟล์ TTF) เปิดด้วย config — รูปตัวอักษรจะต่างจากต้นฉบับเล็กน้อย ต้องบันทึกเป็น deviation
 
 ### 9.3 Docker image
 
-- ใช้ `eclipse-temurin:21-jre-jammy` แบบ automail (ไม่ต้อง `apk add ttf-dejavu` แบบ alpine เดิม เพราะฟอนต์มาจาก font extension)
+- ใช้ `eclipse-temurin:21-jre-jammy` (ไม่ต้อง `apk add ttf-dejavu` แบบ alpine เดิม เพราะฟอนต์มาจาก font extension)
 - ✅ ตรวจแล้ว: image `eclipse-temurin:21-jre-noble` มี `fontconfig`, `libfreetype6` และ `curl` อยู่แล้ว barcode/QR พร้อมตัวอักษรใต้แท่งและฟอนต์ไทย render ถูกต้องใน container จริง (ไม่ต้อง `apt-get install` เพิ่ม)
 
 ---
@@ -420,7 +420,7 @@ printf '%s' "$KEY" | shasum -a 256 | cut -d' ' -f1
 
 ข้อกำหนดเพื่อไม่ให้ optional กลายเป็นช่องโหว่:
 - โหมด `optional`: key ที่ส่งมาแต่ผิด **ต้องได้ 401 เสมอ** ไม่ลดเป็น `anonymous` (ไม่อย่างนั้น client ที่ตั้ง key ผิดจะไม่มีวันรู้)
-- ทุกโหมดที่ไม่ใช่ `required` ต้องจำกัดเครือข่าย: compose bind แค่ `127.0.0.1` หรือ network ภายใน + firewall rule (แนวเดียวกับ `AUTOMAIL_HTTP_BIND` ของ automail)
+- ทุกโหมดที่ไม่ใช่ `required` ต้องจำกัดเครือข่าย: compose bind แค่ `127.0.0.1` หรือ network ภายใน + firewall rule
 - ตอน start log WARN ถ้าโหมดไม่ใช่ `required`; ถ้าโหมด `required` แต่ไม่มี key ใน config → **ไม่ยอม start**
 - metric `report_requests_total{client="anonymous"}` ใช้ดูว่า client ไหนยังไม่ส่ง key ก่อนเปลี่ยนเป็น `required`
 
@@ -447,8 +447,8 @@ printf '%s' "$KEY" | shasum -a 256 | cut -d' ' -f1
 
 | ส่วน | เลือก | เหตุผล |
 |---|---|---|
-| Runtime | Java 21, Spring Boot 4.x | ตรงกับ automail (Boot 4.1.1); Java 8/Boot 2.5 ของ pdf หมดอายุการสนับสนุน |
-| Engine | JasperReports **7.0.8** + `-pdf`, `-groovy`, `-jdt`, `-barcode4j`, `-fonts` (+ `-barbecue` ถ้าจำเป็น) | 7.0.8 เป็น release ล่าสุดบน Maven Central ✅ และตรงกับ automail/checkup-reports → รายงานชุดเดียวกันเรียกผ่าน API นี้ได้ |
+| Runtime | Java 21, Spring Boot 4.x | Boot 4.1.1; Java 8/Boot 2.5 ของ pdf หมดอายุการสนับสนุน |
+| Engine | JasperReports **7.0.8** + `-pdf`, `-groovy`, `-jdt`, `-barcode4j`, `-fonts` (+ `-barbecue` ถ้าจำเป็น) | 7.0.8 เป็น release ล่าสุดบน Maven Central ✅ |
 | Storage | AWS SDK v2 S3 client (`endpointOverride` + `forcePathStyle(true)` สำหรับ rustfs) | S3-compatible ทั่วไป |
 | Cache | Caffeine | in-memory, TTL/size |
 | DB | HikariCP + PostgreSQL driver | |
@@ -562,8 +562,8 @@ tenants:
 | Q1 | **ตอบแล้วบางส่วน:** JR 7.0.8 อ่าน JRXML 6.x ไม่ได้ (ยืนยันแล้ว) — ยังเหลือ: มี JRXML 6.x กี่ไฟล์ที่ต้องย้าย และใครแปลง/ทดสอบ? | ระหว่างที่ยังแปลงไม่ครบ ต้องเปิด pdf ไว้คู่กันสำหรับรายงานที่ยังเป็น 6.x |
 | Q2 | ระบุ tenant ด้วย header หรือ body เป็นหลัก? และ tenant มี bucket/prefix ของตัวเองไหม? | รูปแบบ config ของ tenant |
 | Q3 | ต้องใช้ฟอนต์อื่นนอกจาก TH Sarabun New ไหม (เช่น Myanmar Text สำหรับผู้ป่วยต่างชาติ, RSU)? | ต้องหาฟอนต์ที่ license อนุญาต + ขออนุมัติ font pack |
-| Q4 | การอนุมัติแจกจ่ายฟอนต์ของ automail ครอบคลุม image ของ API นี้ด้วยไหม หรือต้องขอแยก? | ขั้นตอนก่อน push image |
-| Q5 | ต้องเข้ารหัส PDF (เช่น รหัสผ่านเป็นเลขบัตรประชาชนแบบ automail ADR-0004) ไหม? | เพิ่ม option `pdf.password` ใน request |
+| Q4 | การอนุมัติแจกจ่ายฟอนต์ครอบคลุม image ของ API นี้ด้วยไหม หรือต้องขอแยก? | ขั้นตอนก่อน push image |
+| Q5 | ต้องเข้ารหัส PDF (เช่น รหัสผ่านเป็นเลขบัตรประชาชน) ไหม? | เพิ่ม option `pdf.password` ใน request |
 | Q6 | รายงานใหญ่สุดที่คาดไว้กี่หน้า / ใช้เวลาเท่าไร? | ค่า limits และความจำเป็นของ async ใน phase 1 |
 
 ---
