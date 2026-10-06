@@ -7,6 +7,8 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
 - Render without a database: `datasource: "none"` (or no datasource at all for a report that has no `<query>`) fills with one empty record, so blank forms and parameter-only reports need no tenant or DB.
 - `data` field in render and validate requests: JSON read by a report's `<query language="json">` instead of a database. Limited by `report.limits.max-data-size` (default 10MB); not logged. New error codes `DATA_AND_DATASOURCE`, `DATA_NOT_SUPPORTED`, `DATA_TOO_LARGE` and `DATASOURCE_NONE_NOT_ALLOWED`.
@@ -37,5 +39,6 @@ First release.
 - Docker image and a one-command demo (`make dev-up`) with PostgreSQL sample data and rustfs.
 - Release workflow: a `v*` tag builds the jar, publishes the image to GHCR and creates a GitHub Release.
 
-[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/somprasongd/jasper-report-api/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/somprasongd/jasper-report-api/releases/tag/v0.1.0
