@@ -196,6 +196,101 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 
 > JRXML เป็น **โค้ดที่ถูกรัน** (expression เป็น Groovy/Java) — ให้เฉพาะคนที่เชื่อถือได้เขียนลง folder/bucket ของรายงานได้
 
+### ภาพรวมการทำงานของแต่ละแหล่ง
+
+ทุกแหล่งให้ผลลัพธ์เหมือนกัน คือ **bundle** (โฟลเดอร์ในเครื่องที่มี JRXML + ไฟล์ประกอบ พร้อม `version`) ที่ใช้ compile และ render ต่อ ต่างกันที่วิธีได้ bundle มา ผลการ resolve จะถูกจำไว้ `report.cache.check-interval` (ค่าเริ่มต้น 10 วินาที) เพื่อไม่ให้ยิง storage ทุก request
+
+#### 1. โฟลเดอร์ที่ mount (ไม่มี scheme)
+
+อ่านตรงจาก `report.sources.local.root` (ใน container คือ `/app/reports` ซึ่ง mount แบบ read-only) ไม่มี network และไม่ต้อง copy ไฟล์
+
+```mermaid
+flowchart TD
+    A["request: mainReport.url = opd/cert/main.jrxml"] --> B{"ตรวจ path<br/>ไม่ใช่ absolute / ไม่มี ..<br/>ลงท้าย .jrxml"}
+    B -- ไม่ผ่าน --> E1["400 SOURCE_NOT_ALLOWED"]
+    B -- ผ่าน --> C["resolve ใต้ report root<br/>(toRealPath)"]
+    C --> D{"อยู่ใน root จริงๆ<br/>รวม symlink?"}
+    D -- ออกนอก root --> E1
+    D -- ไม่พบไฟล์ --> E2["404 REPORT_NOT_FOUND"]
+    D -- ใช่ --> F["bundle = โฟลเดอร์ที่ไฟล์ main อยู่<br/>(ใช้ไฟล์ในโฟลเดอร์ mount โดยตรง)"]
+    F --> G["version = SHA-256 ของ<br/>ชื่อ + เวลาแก้ไข + ขนาด ทุกไฟล์ในโฟลเดอร์"]
+    G --> H["compile (cache ต่อ version)<br/>subreport / .properties / assets อยู่ข้างกัน"]
+    H --> I["render PDF"]
+```
+
+#### 2. S3 (`s3://bucket/folder/main.jrxml`)
+
+ซิงก์ "โฟลเดอร์" (key prefix) ของไฟล์ main ลง `report.cache.work-dir` ตาม ETag ใช้ credential ของ server และเฉพาะ bucket ใน `S3_ALLOWED_BUCKETS`
+
+```mermaid
+flowchart TD
+    A["request: mainReport.url = s3://reports/opd/cert/main.jrxml"] --> B{"bucket อยู่ใน allowlist?<br/>key ถูกต้อง / .jrxml / อยู่ใน folder?"}
+    B -- ไม่ผ่าน --> E1["400 SOURCE_NOT_ALLOWED"]
+    B -- ผ่าน --> C["ListObjectsV2 ของ prefix opd/cert/<br/>(ข้ามไฟล์ขึ้นต้นด้วย .)"]
+    C -->|"เกิน 2000 object / 100 MB"| E1
+    C -->|"ไม่พบ main.jrxml"| E2["404 REPORT_NOT_FOUND"]
+    C -->|"S3 ล่มจริง: เชื่อมต่อไม่ได้ / timeout / 5xx"| S{"มีเวอร์ชันล่าสุดที่เคยโหลดสำเร็จ?"}
+    S -- มี --> H
+    S -- ไม่มี --> E3["502 STORAGE_ERROR"]
+    C -->|"S3 ปฏิเสธ เช่น 403 (ไม่ใช้ของเก่า)"| E3
+    C --> D["version = SHA-256 ของ key + ETag + ขนาด ทุก object"]
+    D --> F{"work-dir/s3/&lt;hash&gt;/&lt;version&gt;<br/>มีอยู่แล้ว?"}
+    F -- มี --> H
+    F -- ไม่มี --> G["GetObject ทุกไฟล์ลงโฟลเดอร์ชั่วคราว<br/>แล้ว move แบบ atomic<br/>เก็บ 3 เวอร์ชันล่าสุด"]
+    G --> H["compile (cache ต่อ version)"]
+    H --> I["render PDF"]
+```
+
+#### 3. http(s)
+
+URL บอกได้แค่ไฟล์เดียว จึงต้องบอก subreport ทุกตัวใน `subReports[]` ส่วน message bundle ดาวน์โหลดให้เองจากที่เดียวกับ JRXML ทุก URL ต้องอยู่ใน `HTTP_ALLOWED_HOSTS` (ปิดเป็นค่าเริ่มต้น)
+
+```mermaid
+flowchart TD
+    A["request: mainReport.url + subReports[name,url]"] --> B{"ทุก URL: scheme http(s)<br/>host อยู่ใน allowlist?<br/>ชื่อ subreport ไม่ซ้ำ?"}
+    B -- ไม่ผ่าน --> E1["400 SOURCE_NOT_ALLOWED / VALIDATION_FAILED"]
+    B -- ผ่าน --> C["ดาวน์โหลด main.jrxml + subreport ทุกตัว<br/>แบบขนาน (ไม่ตาม redirect, จำกัดขนาด/เวลา)"]
+    C -->|"ไฟล์ใดไม่พบ"| E2["404 REPORT_NOT_FOUND"]
+    C -->|"ต้นทางล่มจริง: เชื่อมต่อไม่ได้ / timeout / 5xx"| S{"มีเวอร์ชันล่าสุดที่เคยโหลดสำเร็จ?"}
+    S -- มี --> H
+    S -- ไม่มี --> E3["502 STORAGE_ERROR"]
+    C -->|"ต้นทางปฏิเสธ เช่น 403 / presigned URL หมดอายุ (ไม่ใช้ของเก่า)"| E3
+    C --> D{"JRXML ประกาศ resourceBundle<br/>และ URL ไม่มี query string?"}
+    D -- ใช่ --> P["ขอ messages.properties และ<br/>messages_&lt;ภาษา&gt;.properties ข้างไฟล์ JRXML<br/>(ไฟล์ที่ 404/403 ข้ามได้)"]
+    D -- "ไม่ / เป็น presigned URL" --> V
+    P --> V["version = SHA-256 ของเนื้อหาไฟล์ทั้งหมด<br/>เก็บใน work-dir/http/&lt;hash&gt;/&lt;version&gt;"]
+    V --> H["compile (cache ต่อ version)<br/>ไม่เปลี่ยนเนื้อหา = ไม่ compile ซ้ำ"]
+    H --> I["render PDF<br/>(รูปภาพใช้ URL เต็มใน expression)"]
+```
+
+### ใช้ S3 แบบไหนดี
+
+มี 2 ทางที่ให้รายงานมาจาก S3: `s3://` (API ถือ credential อ่านอย่างเดียวเอง) และ presigned URL ผ่าน `https://` (ผู้เรียกเซ็น URL ให้ทีละไฟล์)
+
+**แนะนำ `s3://` เป็นค่าตั้งต้น** ใช้ presigned URL เมื่อมีเหตุผลที่ไม่ให้ API ถือ credential เท่านั้น
+
+| | `s3://bucket/folder/main.jrxml` | presigned URL (`https://…?X-Amz-Signature=…`) |
+|---|---|---|
+| credential | API ถือ access key เอง (ตั้งเป็น read-only เฉพาะ bucket รายงาน) | API ไม่ถือเลย ผู้เรียกเป็นคนเซ็น |
+| ชุดรายงาน | ซิงก์ **ทั้งโฟลเดอร์** (subreport, `.properties`, `assets/`) ให้เอง | ได้เฉพาะไฟล์ที่เซ็นมา: ต้องเซ็นและระบุ `subReports[]` ทุกตัว, ไม่มี `.properties` และรูปจาก `assets/` |
+| หลายภาษา (i18n) | ใช้ได้เต็มรูปแบบ | ไม่รองรับ message bundle |
+| ตรวจการเปลี่ยนแปลง | list object เทียบ ETag (ราคาถูก) ดาวน์โหลดเฉพาะเมื่อมีไฟล์เปลี่ยน | ดาวน์โหลดไฟล์ทั้งหมดซ้ำ เพราะ URL ใหม่ทุกครั้ง (ไม่ compile ซ้ำถ้าเนื้อหาเท่าเดิม) |
+| ความปลอดภัย | จำกัดด้วย `S3_ALLOWED_BUCKETS`; secret อยู่ที่ server เท่านั้น | URL เป็น bearer secret จนหมดอายุ (ตั้ง 1–5 นาที) ต้องไม่ log/ไม่เก็บลง DB |
+| ต้นทางล่ม | ใช้เวอร์ชันล่าสุดต่อได้ (stale-if-error) | ใช้ได้เมื่อล่มจริง แต่ URL ที่หมดอายุ/ถูกปฏิเสธ (403) ตอบ `502` ทันที |
+| ตรวจสถานะ | readiness probe ตรวจ S3 ให้ | ไม่มี |
+
+**เหตุผลที่แนะนำ `s3://`:**
+1. **รายงานจริงมักไม่ใช่ไฟล์เดียว** — มี subreport, message bundle และรูป `s3://` ได้ครบโดยไม่ต้องให้ผู้เรียกรู้โครงสร้างข้างใน และ deploy รายงานใหม่ได้ด้วยการอัปโหลดขึ้น bucket อย่างเดียว
+2. **เร็วและเบากว่า** — ตรวจด้วย ETag ดาวน์โหลดเมื่อเปลี่ยนจริง ส่วน presigned URL ต้องดึงทุกไฟล์ใหม่ทุกครั้งที่ signature ใหม่
+3. **ผิวโจมตีเล็กกว่าในทางปฏิบัติ** — ไม่มี URL ลับที่ผู้เรียกต้องสร้างและส่งต่อทุก request (เสี่ยงหลุดทาง log/proxy/error)
+4. **ทนต่อต้นทางล่มและมี readiness** — ดูแลระบบได้ง่ายกว่า
+5. **credential ควบคุมได้** — สร้าง key แยกที่อ่านได้อย่างเดียวเฉพาะ bucket รายงาน และ rotate ที่ server จุดเดียว
+
+**เลือก presigned URL เมื่อ:**
+- นโยบายห้ามให้ API ถือ S3 credential ถาวร
+- bucket เป็นของระบบอื่น (เช่น HIS API) ที่ต้องการให้สิทธิ์ทีละไฟล์แบบมีอายุสั้น
+- รายงานเป็นไฟล์เดียว ไม่มี subreport/ภาษา/รูปจาก `assets/` — ถ้าไม่ใช่ ให้เปลี่ยนไปใช้ `s3://`
+
 ### โฟลเดอร์ของรายงาน (bundle)
 
 **โฟลเดอร์ (หรือ prefix ใน S3) ที่ไฟล์ main อยู่ = ชุดของรายงานนั้น** รวม subreport และรูป:
@@ -267,7 +362,6 @@ sequenceDiagram
 - signature ใหม่ของ object เดิมเป็น bundle เดิม (identity ตัด query ออก) จึงไม่ compile ซ้ำและไม่สร้างโฟลเดอร์ใหม่ในทุก request; แก้ object แล้วเวอร์ชันเปลี่ยนตามเนื้อหา
 - ได้เฉพาะไฟล์ที่เซ็น: ไม่มี `.properties`/รูป (ดูด้านบน) — รายงานหลายไฟล์ใช้ `s3://` แทน
 - ทดสอบ: `make dev-up && make test-presigned` (เซ็น URL ด้วย `scripts/presign-rustfs.sh` แล้วยิง API จริง รวมกรณี URL หมดอายุ/signature ผิด/ไม่เซ็น); JUnit: `PresignedUrlTest`
-
 
 ### Subreport — รองรับ 2 แบบ
 
@@ -487,7 +581,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 48 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # 54 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```
