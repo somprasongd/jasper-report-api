@@ -106,7 +106,7 @@ Base path คือ `/api`
 | `mainReport.modified_at` | ไม่ | รับไว้เพื่อให้เข้ากับ `jasperreports-pdf` แต่ **ไม่ใช้** (API ดูการเปลี่ยนแปลงของไฟล์เอง) |
 | `datasource` | ไม่ | ชื่อ datasource เชิงตรรกะ ดู [การเลือก datasource](#การเลือก-datasource) |
 | `tenant` | ไม่ | ไม่ส่ง = `default`; header `X-Tenant-Id` ชนะค่าใน body |
-| `subReports[]` | ไม่ | ใช้เฉพาะรายงานแบบ `SUBREPORT_DIR` (ระบุ subreport ที่จะ compile; ไม่ระบุ = ทุก `*.jrxml` ในโฟลเดอร์) |
+| `subReports[]` | ไม่ | `{"name": "sub_x", "url": "..."}` — **รายงาน http(s) ต้องระบุ subreport ทุกตัวที่ใช้** (ดาวน์โหลดมาเก็บเป็น `sub_x.jrxml` ในชุดเดียวกับรายงานหลัก) ส่วนโฟลเดอร์/S3 ไม่ต้องส่ง (มีอยู่ในโฟลเดอร์แล้ว) ยกเว้นแบบ `SUBREPORT_DIR` ที่ใช้เลือก subreport ที่จะ compile (ไม่ระบุ = ทุก `*.jrxml` ในโฟลเดอร์) |
 | `parameters[].name` / `value` | ใช่ | ค่า parameter ดู [ชนิดของ parameter](#ชนิดของ-parameter) |
 | `parameters[].type` | ไม่ | ใช้เฉพาะเมื่อ JRXML ประกาศชนิดกว้างๆ (`Object`, `Collection`) |
 | `format` | ไม่ | `pdf` (ค่าเริ่มต้น; ตอนนี้รองรับเฉพาะ `pdf`) |
@@ -192,7 +192,7 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 |---|---|---|
 | ไม่มี scheme | `opd/cert/main.jrxml`, `test.jrxml` | `report.sources.local.root` (ใน container คือ `/app/reports`) ห้าม path แบบ absolute, `..` หรือ symlink ที่ออกนอก root |
 | `s3://` | `s3://reports/opd/cert/main.jrxml` | S3-compatible storage ด้วย credential ของ server เฉพาะ bucket ใน `S3_ALLOWED_BUCKETS` |
-| `http://`, `https://` | `https://files.internal/a.jrxml` | **ปิดอยู่เป็นค่าเริ่มต้น** เปิดเฉพาะ host ใน `HTTP_ALLOWED_HOSTS`; ไม่ตาม redirect; จำกัดขนาดและเวลา; ได้ไฟล์เดียว (ไม่มี subreport/รูปประกอบ) |
+| `http://`, `https://` | `https://files.internal/a.jrxml` | **ปิดอยู่เป็นค่าเริ่มต้น** เปิดเฉพาะ host ใน `HTTP_ALLOWED_HOSTS` (ทุก URL รวม subreport ต้องอยู่ใน allowlist); ไม่ตาม redirect; จำกัดขนาดและเวลา; ดู [รายงานผ่าน http(s)](#รายงานผ่าน-https) |
 
 > JRXML เป็น **โค้ดที่ถูกรัน** (expression เป็น Groovy/Java) — ให้เฉพาะคนที่เชื่อถือได้เขียนลง folder/bucket ของรายงานได้
 
@@ -213,6 +213,22 @@ reports/opd/medical_certificate/
 - ผลที่ compile แล้วเก็บใน memory ต่อเวอร์ชัน (compile ครั้งเดียวแม้มีหลาย request พร้อมกัน); JRXML ที่ compile ไม่ผ่านจะตอบ `422` ทันที ไม่ใช้ของเก่าแบบเงียบๆ
 - S3: โฟลเดอร์ถูกซิงก์ลง `report.cache.work-dir` ตาม ETag (เก็บ 3 เวอร์ชันล่าสุด) ไฟล์ต้องอยู่ใน folder (ห้ามวาง `x.jrxml` ที่ราก bucket เพราะจะซิงก์ทั้ง bucket); จำกัด 2000 object/100 MB ต่อโฟลเดอร์
 - ไฟล์ที่ชื่อขึ้นต้นด้วย `.` ถูกข้าม
+
+### รายงานผ่าน http(s)
+
+URL บอกได้แค่ "ไฟล์เดียว" ไม่มีโฟลเดอร์ให้ไล่ดู API จึงสร้างชุดรายงานจากสิ่งที่ระบุให้ ต่างจากโฟลเดอร์/S3 ที่มีทุกอย่างอยู่ข้างกันอยู่แล้ว (ส่วนนี้ `jasperreports-pdf` รองรับ subreport ผ่าน `subReports[].url` เหมือนกัน — API นี้ใช้รูปแบบเดียวกัน)
+
+| ส่วนของรายงาน | ได้มาอย่างไร |
+|---|---|
+| JRXML หลัก | `mainReport.url` |
+| subreport | **ต้องระบุทุกตัว** ใน `subReports[]` ด้วย `name` + `url` (URL ต่างกันได้ แต่ host ต้องอยู่ใน allowlist) แล้ว `$P{SUBREPORTS}.get("sub_x")` หรือ `$P{SUBREPORT_DIR} + "sub_x.jasper"` ก็ใช้ได้ตามปกติ ถ้าไม่ระบุ จะได้ `404 REPORT_NOT_FOUND` พร้อมคำแนะนำ |
+| message bundle | ดาวน์โหลด **อัตโนมัติ** จากที่เดียวกับไฟล์ JRXML: ถ้า JRXML ประกาศ `resourceBundle="messages"` จะขอ `messages.properties` และ `messages_<ภาษา>.properties` ของภาษาที่น่าจะถูกเลือก (`locale` ใน request, `report.locale` ในไฟล์/config) เช่น `th_TH` และ `th` ทำแยกให้ทุกไฟล์ รวม subreport (bundle ของ subreport อยู่ข้าง URL ของ subreport) ไฟล์ที่ไม่มี (404/403) ข้ามไปได้ |
+| รูปภาพ | ไม่มี `assets/` ให้ ใส่เป็น **URL เต็ม** ใน expression ของรูป เช่น `"https://files.internal/logo.png"` — JasperReports ดึงเอง (ไม่ผ่าน allowlist ของ API เพราะ JRXML คือโค้ดที่เชื่อถืออยู่แล้ว) |
+
+ข้อควรรู้:
+- ดาวน์โหลดใหม่ทุก `report.cache.check-interval` (ค่าเริ่มต้น 10 วินาที) ต่อชุด URL ที่ใช้งานอยู่ — แก้ไฟล์ที่ต้นทางแล้วมีผลเองตามเวลานี้ (เวอร์ชันคำนวณจากเนื้อหาไฟล์ทั้งหมด) ถ้าต้นทางช้าหรือไม่อยากให้ยิงถี่ ให้เพิ่มค่านี้
+- URL ที่มี query string (เช่น pre-signed URL) ใช้เป็นไฟล์ JRXML ได้ แต่ **ไม่ดาวน์โหลด `.properties` ให้** เพราะหา URL ข้างเคียงไม่ได้ — ใช้ S3 ผ่าน `s3://` แทน
+- ชุดรายงานใหญ่ที่มีหลายไฟล์ ใช้โฟลเดอร์หรือ S3 จะง่ายและเร็วกว่า (ซิงก์ตาม ETag ไม่ต้องดาวน์โหลดทุกไฟล์ทุกครั้ง)
 
 ### Subreport — รองรับ 2 แบบ
 
@@ -352,7 +368,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 |---|---|---|
 | โฟลเดอร์ที่ mount (`/app/reports`) | ใช่ | แก้ไฟล์ `.properties` แล้ว request ถัดไปใช้ของใหม่ (เวอร์ชันของโฟลเดอร์เปลี่ยน) |
 | S3 (rustfs/MinIO/AWS) | ใช่ | ทั้งโฟลเดอร์ (JRXML + `.properties` + รูป) ถูกซิงก์ลงเครื่อง ทดสอบกับ rustfs แล้วรวมถึงแก้ `messages.properties` ใน S3 |
-| `http(s)://` | **ไม่** | แหล่งนี้ดึงได้ **ไฟล์ JRXML ไฟล์เดียว** ไม่มี subreport รูป หรือ `.properties` — รายงานที่ใช้ `$R{}` ให้เก็บที่โฟลเดอร์หรือ S3 |
+| `http(s)://` | ใช่ (มีเงื่อนไข) | ดาวน์โหลด JRXML หลัก + subreport ที่ระบุใน `subReports[]` + `.properties` ที่อยู่ข้างไฟล์ JRXML แต่ละไฟล์ ดู [รายงานผ่าน http(s)](#รายงานผ่าน-https) |
 
 ---
 
@@ -430,7 +446,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 40 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport), API key, limits, S3 จริงด้วย rustfs container
+make test        # 46 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

@@ -7,6 +7,7 @@ import com.github.somprasongd.jasperreport.api.datasource.DataSourceRegistry;
 import com.github.somprasongd.jasperreport.api.params.ParameterBinder;
 import com.github.somprasongd.jasperreport.api.source.ResolvedBundle;
 import com.github.somprasongd.jasperreport.api.source.SourceResolver;
+import com.github.somprasongd.jasperreport.api.source.SubReportSource;
 import com.github.somprasongd.jasperreport.api.web.ApiException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -89,7 +90,8 @@ public class RenderService {
         long start = System.nanoTime();
         acquire();
         try {
-            ResolvedBundle bundle = sources.resolve(request.mainReport().url());
+            ResolvedBundle bundle = sources.resolve(request.mainReport().url(), subReportSources(request.subReports()),
+                    localeSelector.hints(request.locale()));
             reportName = stripExtension(bundle.mainFile());
             JasperReport report = compiler.main(bundle);
             datasourceName = selector.select(tenant, request.datasource(),
@@ -117,6 +119,11 @@ public class RenderService {
         }
     }
 
+    /** What an http(s) source needs to know about the listed sub-reports; ignored by folders and S3. */
+    public static List<SubReportSource> subReportSources(List<RenderRequest.ReportRef> refs) {
+        return refs == null ? List.of() : refs.stream().map(r -> new SubReportSource(r.baseName(), r.url())).toList();
+    }
+
     private void acquire() {
         try {
             if (!permits.tryAcquire(properties.limits().queueWait().toMillis(), TimeUnit.MILLISECONDS)) {
@@ -138,7 +145,7 @@ public class RenderService {
         }
         if (declared.contains("SUBREPORT_DIR")) {
             List<String> names = request.subReports() == null ? List.of()
-                    : request.subReports().stream().map(r -> r.name() != null && !r.name().isBlank() ? r.name() : r.url()).toList();
+                    : request.subReports().stream().map(RenderRequest.ReportRef::baseName).toList();
             params.put("SUBREPORT_DIR", compiler.subreportDirectory(bundle, names) + File.separator);
         }
         String assets = assetsDirectory(bundle);

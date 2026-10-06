@@ -23,5 +23,20 @@ public record RenderRequest(
         String locale) {
 
     public record ReportRef(String name, @NotBlank String url, Long modified_at) {
+
+        /** File name without extension: the {@code name}, else the last segment of the {@code url}. */
+        public String baseName() {
+            String value = name != null && !name.isBlank() ? name.trim() : url == null ? "" : url.trim();
+            int query = value.indexOf('?');
+            if (query >= 0) {
+                value = value.substring(0, query);
+            }
+            value = value.substring(value.lastIndexOf('/') + 1);
+            String lower = value.toLowerCase(java.util.Locale.ROOT);
+            if (lower.endsWith(".jrxml") || lower.endsWith(".jasper")) {
+                value = value.substring(0, value.lastIndexOf('.'));
+            }
+            return value;
+        }
     }
 }

@@ -610,7 +610,7 @@ implement ใน repo นี้เมื่อ 2026-10-06 ตามแผน §1
 | D13 | กลไก | ใช้ resource bundle ของ JasperReports (`resourceBundle="messages"` + `$R{key}`) ไม่ทำระบบแปลของเราเอง |
 | D14 | ส่งภาษาทางไหน | **JSON body** ฟิลด์ `locale` (ไม่ใช้ URL/query และไม่อ่าน `Accept-Language`): `url` = รายงานไหน, `locale` = ตัวเลือกการ render เหมือน `format`/`fileName`; `Accept-Language` เป็นภาษาของ browser/ผู้ใช้ปลายทางซึ่งมักไม่ใช่ภาษาของเอกสาร |
 | D15 | ค่าเริ่มต้น | ลำดับ: request `locale` > `<property name="report.locale">` ใน JRXML > `report.locale` ใน config > `en`; **request ชนะ** (เหมือน D4) |
-| D16 | ตำแหน่งไฟล์ข้อความ | `messages*.properties` อยู่ในโฟลเดอร์เดียวกับ JRXML (bundle) → ใช้ได้กับโฟลเดอร์ที่ mount และ S3; `http(s)` ดึงได้ไฟล์เดียวจึงใช้ไม่ได้ |
+| D16 | ตำแหน่งไฟล์ข้อความ | `messages*.properties` อยู่ข้าง JRXML → โฟลเดอร์ที่ mount และ S3 (อยู่ใน bundle อยู่แล้ว) และ http(s) (ดาวน์โหลดไฟล์ข้างๆ ให้อัตโนมัติ ดู §19.4) |
 | D17 | ข้อมูลหลายภาษาใน DB | API ใส่ parameter `REPORT_LANGUAGE` (`th`/`en`, ถ้ารายงานประกาศ) ให้ใช้ใน SQL |
 | D18 | Response | header `Content-Language`; `/validate` แสดง locale ที่ resolve ได้, ภาษาที่มีไฟล์ในแต่ละ bundle และเตือน key ที่ขาด |
 
@@ -627,3 +627,18 @@ implement ใน repo นี้เมื่อ 2026-10-06 ตามแผน §1
 
 `I18nTest` (ค่าเริ่มต้นจากรายงาน, request ชนะ + ข้อมูล DB แปลภาษา + subreport, `th-TH` vs `th`, ภาษาที่ไม่มีไฟล์ → ไฟล์ตั้งต้น, tag ผิด → 400), `LocaleSelectorTest` (ลำดับ), `/validate`, bundle ใน S3 (rustfs) และแก้ `messages.properties` ในโฟลเดอร์/S3 แล้วมีผล, และรันจริงใน Docker กับ PostgreSQL + rustfs (`locale: en` ได้ข้อความอังกฤษ ชื่อผู้ป่วยจากคอลัมน์ `name_en` และวันที่ `6 October 2026`)
 `/validate` เตือน key ที่ขาดในบางภาษา (`BundleVersionTest`) ยังไม่ได้ทดสอบ: ฟอนต์สำหรับภาษาอื่นนอกจากไทย/ละติน
+
+### 19.4 http(s) ต้องรองรับ subreport และ message bundle (แก้ไขข้อจำกัดของ phase 1)
+
+phase 1 ทำ http(s) แบบ "ไฟล์เดียว" ซึ่ง **ด้อยกว่า `jasperreports-pdf`** ที่รับ `subReports[].url` — ไม่ใช่ข้อจำกัดโดยธรรมชาติของ http แต่เป็นสิ่งที่ยังไม่ได้ implement จึงปรับดังนี้
+
+| เรื่อง | การตัดสินใจ |
+|---|---|
+| subreport | ระบุใน `subReports[]` (`name` + `url`) เหมือน pdf; ดาวน์โหลดมาเก็บเป็น `<name>.jrxml` ใน bundle ของรายงาน จึงใช้ได้ทั้ง `SUBREPORTS` และ `SUBREPORT_DIR`; **ไม่เดา URL** (ถ้าไม่ระบุ ตอบ 404 พร้อมคำแนะนำ) เพราะไม่รู้ว่าต้นทางเก็บไฟล์ข้างกันหรือไม่ |
+| message bundle | อ่าน `resourceBundle` จาก JRXML แต่ละไฟล์ แล้วขอ `<bundle>.properties`, `<bundle>_<lang>_<COUNTRY>.properties`, `<bundle>_<lang>.properties` จาก URL ข้างไฟล์นั้น (404/403 = ไม่มี) สำหรับภาษาที่ **อาจ** ถูกเลือก: `locale` ใน request + `report.locale` ใน JRXML (อ่านด้วย regex) + `report.locale` ใน config — ใช้ชุดรวมแทนการคำนวณลำดับความสำคัญซ้ำ จึงถูกต้องไม่ว่าอันไหนชนะ |
+| เวอร์ชัน | แฮชของชื่อ+เนื้อหาไฟล์ที่ดาวน์โหลดทั้งหมด; ตรวจใหม่ทุก `check-interval`; แก้ `.properties` ที่ต้นทางแล้วเวอร์ชันเปลี่ยน → class loader ของ bundle เปลี่ยน (§19.2 ข้อ 2) |
+| รูปภาพ | ไม่ดาวน์โหลดให้ — ใช้ URL เต็มใน expression ซึ่ง JasperReports ดึงเองได้ (ทดสอบแล้ว) ไม่ผ่าน allowlist ของ API (JRXML คือโค้ดที่เชื่อถืออยู่แล้ว) |
+| ความปลอดภัย | ทุก URL (หลัก, subreport, ไฟล์ข้างเคียง) ผ่าน allowlist ของ host; ไม่ตาม redirect; จำกัดขนาด/เวลา/จำนวนไฟล์ (100) |
+| ข้อจำกัดที่เหลือ | URL ที่มี query string (pre-signed) ใช้เป็นไฟล์ JRXML ได้แต่ไม่ดาวน์โหลด `.properties` ให้; ดาวน์โหลดซ้ำทุก check-interval (ไม่ใช้ conditional GET) |
+
+ทดสอบด้วย HTTP server จริงในเทสต์ (`HttpSourceTest`): หลัก + subreport + bundle ของทั้งสอง, `locale: en`, แก้ `.properties` ที่ต้นทางแล้วเปลี่ยน, subreport แบบ `SUBREPORT_DIR`, รูปแบบ URL เต็ม, subreport ที่ไม่ได้ระบุ, host/scheme นอก allowlist, ไฟล์ไม่มี ยังไม่ได้ทดสอบกับ https/host จริงและ pre-signed URL

@@ -122,7 +122,7 @@ class S3BundleSource implements BundleSource {
             Path target = bundleRoot.resolve(version);
             if (!Files.isDirectory(target)) {
                 download(bucket, prefix, objects, bundleRoot, target);
-                prune(bundleRoot, target);
+                WorkDirs.prune(bundleRoot, target, keepVersions);
             }
             return new ResolvedBundle("s3://" + bucket + "/" + prefix, target, mainFile, version);
         } catch (S3Exception e) {
@@ -187,34 +187,11 @@ class S3BundleSource implements BundleSource {
                 Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
                 log.info("Synced s3://{}/{} ({} objects) -> {}", bucket, prefix, objects.size(), target);
             } catch (java.nio.file.FileAlreadyExistsException | java.nio.file.DirectoryNotEmptyException e) {
-                deleteRecursively(tmp); // another request synced the same version first
+                WorkDirs.deleteRecursively(tmp); // another request synced the same version first
             }
         } catch (RuntimeException | IOException e) {
-            deleteRecursively(tmp);
+            WorkDirs.deleteRecursively(tmp);
             throw e;
-        }
-    }
-
-    private void prune(Path bundleRoot, Path current) {
-        try (Stream<Path> versions = Files.list(bundleRoot)) {
-            List<Path> old = versions.filter(Files::isDirectory)
-                    .filter(p -> !p.getFileName().toString().startsWith(".") && !p.equals(current))
-                    .sorted(Comparator.comparingLong((Path p) -> p.toFile().lastModified()).reversed())
-                    .skip(keepVersions - 1L)
-                    .toList();
-            for (Path path : old) {
-                deleteRecursively(path);
-            }
-        } catch (IOException e) {
-            log.warn("Could not prune old bundle versions in {}: {}", bundleRoot, e.getMessage());
-        }
-    }
-
-    static void deleteRecursively(Path path) {
-        try (Stream<Path> walk = Files.walk(path)) {
-            walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-        } catch (IOException ignored) {
-            // best effort
         }
     }
 }

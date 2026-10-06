@@ -87,7 +87,8 @@ public class ReportCompiler {
 
     private JasperReport compile(Path file) {
         if (!Files.isRegularFile(file)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "REPORT_NOT_FOUND", "report file not found in bundle: " + file.getFileName());
+            throw new ApiException(HttpStatus.NOT_FOUND, "REPORT_NOT_FOUND", "report file not found in bundle: " + file.getFileName()
+                    + " (for an http(s) report, list each sub-report in subReports[] with its url)");
         }
         try (InputStream in = Files.newInputStream(file)) {
             log.info("Compiling {}", file);

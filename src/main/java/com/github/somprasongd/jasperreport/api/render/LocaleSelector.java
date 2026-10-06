@@ -36,6 +36,22 @@ public class LocaleSelector {
         return configured != null ? configured : Locale.ENGLISH;
     }
 
+    /**
+     * Language tags that might end up selected for a request (the request's own and the configured default);
+     * lets an http(s) source download the right {@code .properties} files before the report is compiled.
+     * Invalid tags are ignored here; {@link #select} reports them.
+     */
+    public java.util.List<String> hints(String fromRequest) {
+        java.util.List<String> tags = new java.util.ArrayList<>();
+        if (fromRequest != null && TAG.matcher(fromRequest.trim()).matches()) {
+            tags.add(fromRequest.trim());
+        }
+        if (configured != null) {
+            tags.add(configured.toLanguageTag());
+        }
+        return tags;
+    }
+
     private static Locale parse(String value, String what, HttpStatus status) {
         String tag = value.trim();
         if (!TAG.matcher(tag).matches()) {

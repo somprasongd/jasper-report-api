@@ -56,7 +56,9 @@ public class ReportInspector {
 
     public Map<String, Object> inspect(RenderRequest request, String tenantHeader) {
         String tenant = datasources.resolveTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
-        ResolvedBundle bundle = sources.resolve(request.mainReport().url());
+        ResolvedBundle bundle = sources.resolve(request.mainReport().url(),
+                com.github.somprasongd.jasperreport.api.render.RenderService.subReportSources(request.subReports()),
+                localeSelector.hints(request.locale()));
         JasperReport report = compiler.main(bundle);
         List<String> warnings = new ArrayList<>();
 
