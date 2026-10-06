@@ -7,6 +7,9 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+### Changed
+- Release workflow actions upgraded to their Node 24 versions.
+
 ## [0.1.0] - 2026-10-06
 
 First release.
