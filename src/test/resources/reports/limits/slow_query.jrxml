@@ -1,0 +1,13 @@
+<jasperReport name="slow_query" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0031">
+	<property name="report.datasource" value="opd"/>
+	<!-- scans billions of rows for nothing: only a database-side cancel stops it in time -->
+	<query language="sql"><![CDATA[select x from system_range(1, 5000000000) where mod(x, 7) = -1]]></query>
+	<field name="x" class="java.lang.Long"/>
+	<detail>
+		<band height="30">
+			<element kind="textField" uuid="9e4f5a64-0b1e-4c5e-9d11-6a0d2d3b0032" x="0" y="0" width="200" height="24" fontName="TH Sarabun New" fontSize="16">
+				<expression><![CDATA["row " + $F{x}]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

@@ -43,3 +43,7 @@ tenants:
     default-datasource: opd
     datasources:
       opd: { url: "jdbc:postgresql://10.0.1.10:5432/hosv4", username: report_ro, password: "${HA_OPD_DB_PASSWORD}" }
+      # other databases (drivers are bundled): see README "เพิ่ม DB ใหม่ / DB ชนิดอื่น"
+      # erp:    { url: "jdbc:sqlserver://db:1433;databaseName=erp;encrypt=true", username: report_ro, password: "${ERP_DB_PASSWORD}" }
+      # shop:   { url: "jdbc:mysql://db:3306/shop", username: report_ro, password: "${SHOP_DB_PASSWORD}" }
+      # fin:    { url: "jdbc:oracle:thin:@//db:1521/FIN", username: report_ro, password: "${FIN_DB_PASSWORD}" }

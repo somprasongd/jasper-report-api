@@ -39,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.SQLTimeoutException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -185,6 +186,12 @@ public class RenderService {
         context.setProperty("net.sf.jasperreports.governor.timeout", String.valueOf(limits.fillTimeout().toMillis()));
         context.setProperty("net.sf.jasperreports.governor.max.pages.enabled", "true");
         context.setProperty("net.sf.jasperreports.governor.max.pages", String.valueOf(limits.maxPages()));
+        if (plan.kind() == DataPlan.Kind.DATABASE && !limits.queryTimeout().isZero()) {
+            // Statement.setQueryTimeout (seconds) works on every JDBC driver and cancels the query in the database;
+            // it also covers sub-reports, which fill under the same context
+            long seconds = Math.max(1, (limits.queryTimeout().toMillis() + 999) / 1000);
+            context.setProperty("net.sf.jasperreports.jdbc.query.timeout", String.valueOf(seconds));
+        }
         try {
             JasperFillManager filler = JasperFillManager.getInstance(context);
             return switch (plan.kind()) {
@@ -233,6 +240,11 @@ public class RenderService {
                 return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "PAGE_LIMIT_EXCEEDED",
                         "report exceeded the limit of " + properties.limits().maxPages() + " pages", failure);
             }
+            if (t instanceof SQLException sql && isQueryTimeout(sql)) {
+                return new ApiException(HttpStatus.GATEWAY_TIMEOUT, "QUERY_TIMEOUT",
+                        "query on '" + tenant + "/" + datasourceName + "' exceeded " + properties.limits().queryTimeout()
+                                + " (report.limits.query-timeout)", failure);
+            }
             if (t instanceof SQLException) {
                 return new ApiException(HttpStatus.BAD_GATEWAY, "DATABASE_ERROR",
                         "database '" + tenant + "/" + datasourceName + "' failed: " + rootMessage(t), failure);
@@ -240,6 +252,11 @@ public class RenderService {
         }
         log.error("Report fill failed", failure);
         return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "report fill failed: " + rootMessage(failure), failure);
+    }
+
+    /** JDBC timeout exception, or PostgreSQL's query_canceled (what {@code statement_timeout} raises). */
+    private static boolean isQueryTimeout(SQLException e) {
+        return e instanceof SQLTimeoutException || "57014".equals(e.getSQLState());
     }
 
     private byte[] exportPdf(JasperPrint print) {

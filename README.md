@@ -146,6 +146,7 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `PAGE_LIMIT_EXCEEDED` | 422 | เกิน `report.limits.max-pages` |
 | `RENDER_BUSY` | 503 + `Retry-After` | ช่อง render เต็มนานเกิน `queue-wait` |
 | `RENDER_TIMEOUT` | 504 | fill นานเกิน `fill-timeout` |
+| `QUERY_TIMEOUT` | 504 | query ใน DB นานเกิน `query-timeout` |
 | `DATABASE_ERROR` | 502 | DB ต่อไม่ได้หรือ SQL ผิด |
 | `STORAGE_ERROR` | 502 | อ่าน S3/host ปลายทางไม่ได้ |
 | `INTERNAL_ERROR` | 500 | อื่นๆ (เช่น รูปที่รายงานอ้างไม่มีไฟล์) |
@@ -426,9 +427,35 @@ Client ส่งเฉพาะ **ชื่อเชิงตรรกะ** (`op
 - subreport ที่ใช้ข้อมูลชุดเดียวกันให้ส่งต่อจากรายงานหลักด้วย `((net.sf.jasperreports.json.data.JsonDataSource)$P{REPORT_DATA_SOURCE}).subDataSource("เส้นทาง")` (ยังไม่มีเทสต์ครอบคลุมกรณี subreport)
 - `POST /api/v1/reports/validate` รับ `data` เหมือนกัน และจะรายงาน `datasource.resolved` เป็น `json` หรือ `none`
 
-### เพิ่ม DB ใหม่
+### เพิ่ม DB ใหม่ / DB ชนิดอื่น
 
-PostgreSQL: เพิ่มใน YAML ได้เลย (ไม่ต้องแก้โค้ด) เช่น `tenants.default.datasources.lab.url: jdbc:postgresql://...` DB ชนิดอื่นต้องเพิ่ม JDBC driver ใน `pom.xml` ก่อน และ `statement_timeout` (`report.limits.query-timeout`) ใช้ได้เฉพาะ PostgreSQL
+Datasource ใหม่เป็นแค่การตั้งค่า ไม่ต้องแก้โค้ด: เพิ่มชื่อใหม่ใต้ `tenants.<tenant>.datasources` ใน `config/application.yml` (ตัวแปร `OPD_DB_*` / `IPD_DB_*` ผูกไว้แค่ `opd` กับ `ipd`) แล้วเรียกด้วยชื่อนั้นใน `datasource`
+
+```yaml
+tenants:
+  default:
+    datasources:
+      erp:
+        url: jdbc:sqlserver://db-host:1433;databaseName=erp;encrypt=true
+        username: report_ro
+        password: ${ERP_DB_PASSWORD}
+        pool-size: 3
+```
+
+JDBC driver ที่ติดมากับ jar แล้ว (เลือกจาก URL อัตโนมัติ ไม่ต้องระบุ `driver-class-name`):
+
+| DB | รูปแบบ URL |
+|---|---|
+| PostgreSQL | `jdbc:postgresql://host:5432/db` |
+| MySQL | `jdbc:mysql://host:3306/db` |
+| SQL Server | `jdbc:sqlserver://host:1433;databaseName=db;encrypt=true` |
+| Oracle | `jdbc:oracle:thin:@//host:1521/SERVICE_NAME` |
+
+- ใช้ user ที่มีสิทธิ์อ่านอย่างเดียว (`readOnly` เปิดเป็นค่าเริ่มต้น แต่การบังคับจริงขึ้นกับ driver จึงอย่าพึ่งแค่ค่านี้)
+- **query timeout:** `report.limits.query-timeout` ถูกส่งให้ JDBC (`Statement.setQueryTimeout`) กับทุก driver และทุก subreport ถ้าเกินจะตอบ 504 `QUERY_TIMEOUT` พร้อมยกเลิก query ใน DB (PostgreSQL มี `statement_timeout` ตั้งเพิ่มที่ connection อีกชั้น) มีเทสต์อัตโนมัติกับ H2 เท่านั้น ส่วน PostgreSQL, MySQL, SQL Server และ Oracle ยังไม่ได้ลองกับ DB จริง ควรทดสอบ query หนักๆ ก่อนใช้งาน
+- **query ใน JRXML ต้องเป็น SQL ของ DB นั้น** รายงานที่เขียนไว้สำหรับ PostgreSQL ไม่ทำงานกับ DB อื่นเอง (เช่น `LIMIT`, `ILIKE`, ชื่อฟังก์ชันวันที่) ผูกรายงานกับ datasource ที่ถูกต้องด้วย `report.datasource` ใน JRXML
+- driver เพิ่มขนาด jar ราว 12 MB ถ้าไม่ใช้ DB ตัวไหนให้ลบ dependency นั้นออกจาก `pom.xml` ได้ ส่วน DB อื่นที่ไม่อยู่ในตาราง (เช่น MariaDB, DB2) ให้เพิ่ม JDBC driver ของมันใน `pom.xml` แล้ว build ใหม่ (Dockerfile build jar เองในตัว image)
+- driver ของ Oracle (`ojdbc11`) มีเงื่อนไขสิทธิ์การใช้ของ Oracle เอง ตรวจให้แน่ใจว่าเข้ากับการแจกจ่าย image ของคุณก่อน
 
 ### หลาย tenant / หลาย DB
 
@@ -598,7 +625,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 | `report.limits.max-concurrent-renders` | `4` | จำนวน render พร้อมกัน |
 | `report.limits.queue-wait` | `10s` | รอช่อง render ได้นานเท่านี้ก่อนตอบ 503 |
 | `report.limits.fill-timeout` | `60s` | เวลา fill สูงสุด (ตัดด้วย governor ของ JasperReports) |
-| `report.limits.query-timeout` | `30s` | PostgreSQL `statement_timeout` ของ connection |
+| `report.limits.query-timeout` | `30s` | เวลา query สูงสุดต่อ statement (JDBC query timeout ทุก driver; `0` = ไม่จำกัด) |
 | `report.limits.max-pages` | `500` | จำนวนหน้าสูงสุด |
 | `report.limits.max-data-size` | `10MB` | ขนาดสูงสุดของ `data` (JSON) ใน request ตรวจหลังแปลง JSON แล้ว |
 | `report.sources.max-bytes` | `5MB` | ขนาดสูงสุดของแต่ละไฟล์ที่ดึงผ่าน http(s) |
@@ -625,7 +652,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 70 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # 71 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 และ presigned URL จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

@@ -372,7 +372,7 @@ log เฉพาะ **ชื่อและชนิด** ของ parameter �
 | จำนวน render พร้อมกัน | `limits.max-concurrent-renders: 4` | `Semaphore`; รอเกิน `limits.queue-wait: 10s` → 503 + `Retry-After` |
 | เวลา fill | `limits.fill-timeout: 60s` | ใช้ governor ของ JasperReports (`net.sf.jasperreports.governor.timeout.*`) → 504 |
 | จำนวนหน้า | `limits.max-pages: 500` | governor `net.sf.jasperreports.governor.max.pages.*` → 422 |
-| query timeout | `limits.query-timeout: 30s` | property query timeout ของ JDBC query executer + `statement_timeout` ของ DB user ⚠️ ยืนยันชื่อ property ใน JR 7 |
+| query timeout | `limits.query-timeout: 30s` | `net.sf.jasperreports.jdbc.query.timeout` (JDBC query executer) + `statement_timeout` ของ PostgreSQL |
 | หน่วยความจำ | virtualizer เมื่อเปิด `virtualizer.enabled` | `JRSwapFileVirtualizer` ลงดิสก์ชั่วคราว กัน OOM สำหรับรายงานหลายพันหน้า |
 | ขนาด JRXML ที่ดึง | `sources.max-bytes: 5MB` | ทั้ง S3 และ https |
 | Async (phase 2) | — | `POST /jobs` → เก็บผลใน bucket output (lifecycle ลบอัตโนมัติ เช่น 1 วัน) → pre-signed URL; สถานะงานเก็บใน memory ถ้า instance เดียว หรือใน DB ถ้าหลาย instance |
@@ -592,7 +592,7 @@ implement ใน repo นี้เมื่อ 2026-10-06 ตามแผน §1
 6. **`/api/healthz` อยู่นอก `/v1`** เหมือนของเดิม; `GET /actuator/health/readiness` รวม datasource ทุกตัวและ S3
 7. **Locale ไม่ตั้งเป็น `th_TH`** (ดู §5.5) เพื่อไม่ให้ปีใน pattern วันที่เปลี่ยนเป็น พ.ศ. โดยไม่ตั้งใจ
 8. **Timestamp ที่ลงท้าย `Z` ตีความเป็น UTC** (ตาม RFC 3339 แบบ pdf) — ของ generater เดิม `'Z'` เป็นแค่ตัวอักษรและถูกอ่านเป็นเวลาท้องถิ่น
-9. **query timeout ทำที่ฝั่ง PostgreSQL** ด้วย `SET statement_timeout` ใน `connectionInitSql` ของ Hikari (เฉพาะ URL ที่ขึ้นต้น `jdbc:postgresql:`) ไม่ได้ตั้ง property ของ JasperReports; fill timeout และ max pages ใช้ governor ของ JasperReports (ทดสอบแล้วทั้งสองตัว)
+9. **query timeout** ตั้งผ่าน property `net.sf.jasperreports.jdbc.query.timeout` ของ context ตอน fill (ยืนยันชื่อแล้วใน JR 7.0.8; ใช้ `Statement.setQueryTimeout` จึงใช้ได้กับทุก driver และครอบคลุม subreport) เกินแล้วตอบ 504 `QUERY_TIMEOUT`; PostgreSQL ยังมี `SET statement_timeout` ใน `connectionInitSql` ของ Hikari อีกชั้น (เฉพาะ URL ที่ขึ้นต้น `jdbc:postgresql:`); fill timeout และ max pages ใช้ governor ของ JasperReports (ทดสอบแล้วทั้งสามตัว)
 10. **ผลของ compile ที่ล้มเหลวถูกจำ 5 วินาที** กัน compile ซ้ำถี่ๆ แต่เวอร์ชันของโฟลเดอร์เปลี่ยนเมื่อไร ลองใหม่ทันที
 11. **ไม่ได้ทำใน phase 1 (ตามแผน):** async jobs, `xlsx`/`csv`, virtualizer, alias ฟอนต์ `TH SarabunPSK`, tenant ที่มี root/bucket ของตัวเอง, Sentry (ใช้ log แบบ structured + metrics แทน), การบล็อก IP ภายในของ http(s) source (ใช้ allowlist ชื่อ host อย่างเดียว)
 12. ผลลัพธ์ถูกสร้างใน memory ทั้งก้อนก่อนตอบ (พอสำหรับรายงานที่จำกัดด้วย `max-pages`) — ถ้ามีรายงานใหญ่มาก ให้ทำ virtualizer/async ใน phase 2
