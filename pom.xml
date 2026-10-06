@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.github.somprasongd.jasperreport</groupId>
 	<artifactId>jasper-report-api</artifactId>
-	<version>0.1.0</version>
+	<version>0.1.1-SNAPSHOT</version>
 	<name>jasper-report-api</name>
 	<description>REST API that renders JasperReports (JRXML) to PDF</description>
 
