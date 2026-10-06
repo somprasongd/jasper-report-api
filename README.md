@@ -226,7 +226,9 @@ URL บอกได้แค่ "ไฟล์เดียว" ไม่มีโ
 | รูปภาพ | ไม่มี `assets/` ให้ ใส่เป็น **URL เต็ม** ใน expression ของรูป เช่น `"https://files.internal/logo.png"` — JasperReports ดึงเอง (ไม่ผ่าน allowlist ของ API เพราะ JRXML คือโค้ดที่เชื่อถืออยู่แล้ว) |
 
 ข้อควรรู้:
-- ดาวน์โหลดใหม่ทุก `report.cache.check-interval` (ค่าเริ่มต้น 10 วินาที) ต่อชุด URL ที่ใช้งานอยู่ — แก้ไฟล์ที่ต้นทางแล้วมีผลเองตามเวลานี้ (เวอร์ชันคำนวณจากเนื้อหาไฟล์ทั้งหมด) ถ้าต้นทางช้าหรือไม่อยากให้ยิงถี่ ให้เพิ่มค่านี้
+- **ตรวจ/ดาวน์โหลดใหม่ทุก `report.cache.check-interval`** (ค่าเริ่มต้น 10 วินาที) เมื่อมี request เข้ามาหลังหมดอายุ (ไม่มีตัวทำงานเบื้องหลัง) ไฟล์ทั้งชุดถูกดาวน์โหลดใหม่ **พร้อมกัน** (JRXML หลัก + subreport ในรอบแรก แล้ว `.properties` ทุกไฟล์ที่เป็นไปได้ในรอบที่สอง) จำกัดจำนวนที่ยิงพร้อมกันทั้งระบบด้วย `report.sources.http.parallelism` (ค่าเริ่มต้น 8) เวลาต่อรอบจึงใกล้เคียงไฟล์ที่ช้าที่สุดสองรอบ ไม่ใช่ผลรวมของทุกไฟล์; เนื้อหาไม่เปลี่ยน = เวอร์ชันเท่าเดิม = ไม่ compile ใหม่; แก้ไฟล์ที่ต้นทางแล้วมีผลเองภายในเวลานี้
+- **ต้นทางล่มไม่ทำให้รายงานล่ม (stale-if-error):** ถ้ารอบตรวจใหม่ล้มเหลวเพราะ **ระบบปลายทางมีปัญหา** (เชื่อมต่อไม่ได้, timeout, HTTP 5xx) API ใช้เวอร์ชันล่าสุดที่เคยโหลดสำเร็จต่อ (บันทึก WARN และนับ metric `report_source_stale_total{source}`) แล้วลองต้นทางใหม่เมื่อครบ `check-interval` ถัดไป — **ไม่ปิดบังคำตอบของต้นทาง:** 404 (ไฟล์ถูกลบ), 401/403 (สิทธิ์/pre-signed URL หมดอายุหรือไม่ถูกต้อง) ยังตอบข้อผิดพลาดตามจริง ไม่เช่นนั้นสำเนาเก่าจะอยู่เกินสิทธิ์ที่ให้ไว้; รายงานที่ไม่เคยโหลดสำเร็จมาก่อนก็ไม่มีของเก่าให้ใช้ (ตอบ `502 STORAGE_ERROR`) ใช้กับ `s3://` ด้วย — ควรตั้งแจ้งเตือนจาก metric นี้
+- รูปที่ใส่เป็น URL เต็มใน expression ถูกดึงตอน render ด้วย JasperReports เอง จึงยังขึ้นกับต้นทางตอนนั้น (ไม่ผ่าน stale-if-error)
 - URL ที่มี query string (เช่น pre-signed URL) ใช้เป็นไฟล์ JRXML ได้ แต่ **ไม่ดาวน์โหลด `.properties` ให้** เพราะหา URL ข้างเคียงไม่ได้ — ใช้ S3 ผ่าน `s3://` แทน
 - ชุดรายงานใหญ่ที่มีหลายไฟล์ ใช้โฟลเดอร์หรือ S3 จะง่ายและเร็วกว่า (ซิงก์ตาม ETag ไม่ต้องดาวน์โหลดทุกไฟล์ทุกครั้ง)
 
@@ -424,7 +426,9 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 | `report.limits.fill-timeout` | `60s` | เวลา fill สูงสุด (ตัดด้วย governor ของ JasperReports) |
 | `report.limits.query-timeout` | `30s` | PostgreSQL `statement_timeout` ของ connection |
 | `report.limits.max-pages` | `500` | จำนวนหน้าสูงสุด |
-| `report.sources.max-bytes` | `5MB` | ขนาด JRXML สูงสุดที่ดึงผ่าน http(s) |
+| `report.sources.max-bytes` | `5MB` | ขนาดสูงสุดของแต่ละไฟล์ที่ดึงผ่าน http(s) |
+| `report.sources.http.timeout` | `10s` | timeout ต่อการดาวน์โหลดหนึ่งครั้ง |
+| `report.sources.http.parallelism` | `8` | จำนวนดาวน์โหลด http(s) ที่ยิงพร้อมกันทั้งระบบ |
 | `report.sources.s3.max-objects`, `max-bundle-bytes` | `2000`, `100MB` | เพดานของโฟลเดอร์ใน S3 |
 | `report.datasource.allow-request-override` | `true` | ดู [การเลือก datasource](#การเลือก-datasource) |
 | `report.parameters.strict` | `false` | `true` = parameter ที่ไม่ได้ประกาศใน JRXML → 400 |
@@ -433,7 +437,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 
 ## การดำเนินงาน
 
-- **Metrics** (`/api/actuator/prometheus`): `report_render_seconds{tenant,report,datasource,format,outcome}`, `report_compile_seconds`, `report_cache_requests_total{result}`, `report_inflight`, `report_requests_total{client}`, `report_requests_rejected_total{code}`, `report_datasource_override_total{...}`, และ metric ของ JVM/HikariCP
+- **Metrics** (`/api/actuator/prometheus`): `report_render_seconds{tenant,report,datasource,format,outcome}`, `report_compile_seconds`, `report_cache_requests_total{result}`, `report_inflight`, `report_requests_total{client}`, `report_requests_rejected_total{code}`, `report_datasource_override_total{...}`, `report_source_stale_total{source}` (ใช้ของเก่าเพราะต้นทางล่ม), และ metric ของ JVM/HikariCP
 - **Log:** มี `requestId` และ `clientId` ใน MDC; ไม่บันทึกค่า parameter (อาจเป็นข้อมูลผู้ป่วย) ใช้ log format แบบ structured ได้ด้วย `LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash`
 - **Readiness** `UP` ต่อเมื่อทุก datasource ที่ตั้งค่าไว้ต่อได้ และ (ถ้าเปิด S3) bucket แรกใน `S3_ALLOWED_BUCKETS` มีอยู่และเข้าถึงได้
 - **ข้อจำกัด:** ตอนนี้ผลลัพธ์ถูกสร้างใน memory แล้วส่งกลับทั้งก้อน (sync); รายงานหลายพันหน้าควรจำกัดด้วย `max-pages` ยังไม่มี async job, `xlsx`/`csv`, และ tenant ที่มี root/bucket ของตัวเอง (ดู phase 2 ในเอกสารออกแบบ)
@@ -446,7 +450,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/reports/render -H "X-API-Key: ..." -H 
 ต้องใช้ JDK 21 (`make` เลือกให้เองบน macOS)
 
 ```bash
-make test        # 46 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
+make test        # 48 เทสต์: render จริง (ไทย/ฟอนต์ฝัง/QR/barcode/subreport/หลายภาษา), API key, limits, S3 จริงด้วย rustfs container, http จริงด้วย server ในเทสต์
 make build       # target/jasper-report-api-*.jar
 make run         # รันในเครื่อง — ตั้ง DB/key ผ่าน env หรือ config/application.yml
 ```

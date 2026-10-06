@@ -50,7 +50,9 @@ public record ReportProperties(
         }
     }
 
-    public record Http(@DefaultValue List<String> allowedHosts, @DefaultValue("10s") Duration timeout) {
+    public record Http(@DefaultValue List<String> allowedHosts, @DefaultValue("10s") Duration timeout,
+                       /** Downloads in flight at once, across all requests (the files of one report are fetched in parallel). */
+                       @DefaultValue("8") int parallelism) {
     }
 
     public record Cache(

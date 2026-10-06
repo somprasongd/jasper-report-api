@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -39,6 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class HttpSourceTest {
 
     static final Map<String, byte[]> CONTENT = new ConcurrentHashMap<>();
+    /** When non-zero every request is answered with this status (simulates an outage). */
+    static volatile int forcedStatus = 0;
+    static volatile long delayMillis = 0;
+    static final AtomicInteger INFLIGHT = new AtomicInteger();
+    static final AtomicInteger MAX_INFLIGHT = new AtomicInteger();
     static final HttpServer SERVER = start();
     static final String BASE = "http://127.0.0.1:" + SERVER.getAddress().getPort();
 
@@ -46,8 +52,26 @@ class HttpSourceTest {
         try {
             Path dir = Path.of("src/test/resources/reports");
             HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+            server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
             server.createContext("/", exchange -> {
+                int now = INFLIGHT.incrementAndGet();
+                MAX_INFLIGHT.accumulateAndGet(now, Math::max);
+                try {
+                    if (delayMillis > 0) {
+                        Thread.sleep(delayMillis);
+                    }
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    INFLIGHT.decrementAndGet();
+                }
                 String path = exchange.getRequestURI().getPath();
+                // the logo is fetched by JasperReports at render time, not by the bundle download: keep it up during the "outage"
+                if (forcedStatus != 0 && !path.endsWith(".png")) {
+                    exchange.sendResponseHeaders(forcedStatus, -1);
+                    exchange.close();
+                    return;
+                }
                 byte[] body = CONTENT.get(path);
                 if (body == null && path.startsWith("/reports/")) {
                     Path file = dir.resolve(path.substring("/reports/".length())).normalize();
@@ -90,6 +114,9 @@ class HttpSourceTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    io.micrometer.core.instrument.MeterRegistry meters;
 
     private static String body(String locale, boolean withSub) {
         return "{\"mainReport\":{\"url\":\"" + BASE + "/reports/demo/demo.jrxml\"},"
@@ -150,6 +177,63 @@ class HttpSourceTest {
                 + "\"subReports\":[{\"url\":\"" + BASE + "/reports/subdirmode/sub_dir.jrxml\"}],"
                 + "\"parameters\":[{\"name\":\"hn\",\"value\":\"HN001\"}]}");
         assertThat(text(result)).contains("แบบ SUBREPORT_DIR: สมชาย ใจดี").contains("sub-report (.jasper): visits=2");
+    }
+
+    @Test
+    void anOutageOfTheStorageKeepsServingTheLastGoodVersion() throws Exception {
+        MvcResult good = render(body("en", true));
+        assertThat(text(good)).contains("Test medical certificate");
+        String version = good.getResponse().getHeader("X-Report-Version");
+        double staleBefore = meters.counter("report.source.stale", "source", "http").count();
+        try {
+            forcedStatus = 500;
+            MvcResult duringOutage = render(body("en", true));
+            assertThat(text(duringOutage)).contains("Test medical certificate");
+            assertThat(duringOutage.getResponse().getHeader("X-Report-Version")).isEqualTo(version);
+            assertThat(meters.counter("report.source.stale", "source", "http").count()).isGreaterThan(staleBefore);
+
+            // never loaded before: nothing to fall back to
+            mvc.perform(post("/v1/reports/render").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
+                            .content(body("ja", true)))
+                    .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("STORAGE_ERROR"));
+
+            // an expired / forbidden URL is an answer, not an outage: serving the stale copy would outlive the access
+            forcedStatus = 403;
+            mvc.perform(post("/v1/reports/render").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
+                            .content(body("en", true)))
+                    .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("STORAGE_ERROR"));
+
+            // "not found" is an answer about the report, not an outage: it must not be masked
+            forcedStatus = 404;
+            mvc.perform(post("/v1/reports/render").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
+                            .content(body("en", true)))
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("REPORT_NOT_FOUND"));
+        } finally {
+            forcedStatus = 0;
+        }
+        CONTENT.put("/reports/demo/messages_en.properties", "title=Back after the outage\npatient=P\nprinted_at=Q\n".getBytes(StandardCharsets.UTF_8));
+        try {
+            assertThat(text(render(body("en", true)))).contains("Back after the outage");
+        } finally {
+            CONTENT.remove("/reports/demo/messages_en.properties");
+        }
+    }
+
+    @Test
+    void theFilesOfOneReportAreDownloadedInParallel() throws Exception {
+        delayMillis = 150;
+        MAX_INFLIGHT.set(0);
+        try {
+            long start = System.nanoTime();
+            // a language no other test used: a cold load of main + sub-report + 6 possible message files
+            MvcResult result = render(body("ko", true));
+            long millis = (System.nanoTime() - start) / 1_000_000;
+            assertThat(text(result)).contains("ใบรับรองแพทย์ทดสอบ");
+            assertThat(MAX_INFLIGHT.get()).as("downloads in flight at once").isGreaterThanOrEqualTo(4);
+            assertThat(millis).as("8 downloads of 150 ms would take 1200 ms one after the other").isLessThan(1100);
+        } finally {
+            delayMillis = 0;
+        }
     }
 
     @Test

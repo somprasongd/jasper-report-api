@@ -27,6 +27,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,12 +53,15 @@ class HttpBundleSource {
     private final Path workDir;
     private final int keepVersions;
     private final HttpClient client;
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    private final Semaphore slots;
 
     HttpBundleSource(ReportProperties.Http settings, long maxBytes, Path workDir, int keepVersions) {
         this.settings = settings;
         this.maxBytes = maxBytes;
         this.workDir = workDir.resolve("http");
         this.keepVersions = keepVersions;
+        this.slots = new Semaphore(Math.max(1, settings.parallelism()), true);
         this.client = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(settings.timeout())
@@ -61,32 +69,66 @@ class HttpBundleSource {
     }
 
     ResolvedBundle resolve(String mainUrl, List<SubReportSource> subReports, List<String> localeHints) {
-        Map<String, byte[]> files = new TreeMap<>();
+        // validate every URL and name first (cheap, no network), then download the JRXML files in parallel
         Map<String, URI> jrxmls = new LinkedHashMap<>();
-
-        URI main = checkedUri(mainUrl);
-        files.put("main.jrxml", downloadRequired(main, "report"));
-        jrxmls.put("main.jrxml", main);
-
+        Map<String, String> what = new LinkedHashMap<>();
+        jrxmls.put("main.jrxml", checkedUri(mainUrl));
+        what.put("main.jrxml", "report");
         for (SubReportSource sub : subReports) {
             String base = ReportCompiler.safeFileName(sub.baseName());
             String fileName = base + ".jrxml";
             if (base.equals("main") || jrxmls.containsKey(fileName)) {
                 throw ApiException.badRequest("VALIDATION_FAILED", "sub-report name '" + base + "' is used twice or is reserved");
             }
-            URI uri = checkedUri(sub.url());
-            files.put(fileName, downloadRequired(uri, "sub-report '" + base + "'"));
-            jrxmls.put(fileName, uri);
+            jrxmls.put(fileName, checkedUri(sub.url()));
+            what.put(fileName, "sub-report '" + base + "'");
         }
-
-        Set<String> suffixes = languageSuffixes(localeHints, new String(files.get("main.jrxml"), StandardCharsets.UTF_8));
-        for (Map.Entry<String, URI> jrxml : jrxmls.entrySet()) {
-            fetchMessageBundles(new String(files.get(jrxml.getKey()), StandardCharsets.UTF_8), jrxml.getValue(), suffixes, files);
-        }
-        if (files.size() > MAX_FILES) {
+        if (jrxmls.size() > MAX_FILES) {
             throw ApiException.badRequest("SOURCE_NOT_ALLOWED", "more than " + MAX_FILES + " files for one report");
         }
+
+        Map<String, byte[]> files = new TreeMap<>();
+        Map<String, Future<byte[]>> pending = new LinkedHashMap<>();
+        jrxmls.forEach((name, uri) -> pending.put(name, executor.submit(() -> downloadRequired(uri, what.get(name)))));
+        awaitAll(pending, files, true);
+
+        // message bundles next to each JRXML, for every language that might be selected, also in parallel
+        Set<String> suffixes = languageSuffixes(localeHints, new String(files.get("main.jrxml"), StandardCharsets.UTF_8));
+        Map<String, URI> candidates = new LinkedHashMap<>();
+        for (Map.Entry<String, URI> jrxml : jrxmls.entrySet()) {
+            collectMessageBundles(new String(files.get(jrxml.getKey()), StandardCharsets.UTF_8), jrxml.getValue(), suffixes, files, candidates);
+        }
+        if (files.size() + candidates.size() > MAX_FILES) {
+            throw ApiException.badRequest("SOURCE_NOT_ALLOWED", "more than " + MAX_FILES + " files for one report");
+        }
+        Map<String, Future<byte[]>> optional = new LinkedHashMap<>();
+        candidates.forEach((name, uri) -> optional.put(name, executor.submit(() -> downloadOptional(uri))));
+        awaitAll(optional, files, false);
         return store(mainUrl, subReports, files);
+    }
+
+    /** Waits for every download; the first failure in submission order wins (the main report first) and cancels the rest. */
+    private static void awaitAll(Map<String, Future<byte[]>> pending, Map<String, byte[]> into, boolean required) {
+        try {
+            for (Map.Entry<String, Future<byte[]>> entry : pending.entrySet()) {
+                byte[] content = entry.getValue().get();
+                if (content != null) {
+                    into.put(entry.getKey(), content);
+                } else if (required) {
+                    throw new IllegalStateException("no content for " + entry.getKey());
+                }
+            }
+        } catch (ExecutionException e) {
+            pending.values().forEach(f -> f.cancel(true));
+            if (e.getCause() instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "download failed: " + e.getCause(), e.getCause());
+        } catch (InterruptedException e) {
+            pending.values().forEach(f -> f.cancel(true));
+            Thread.currentThread().interrupt();
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "interrupted while downloading a report", e);
+        }
     }
 
     /** {@code th-TH} -> {@code th_TH}, {@code th}: the file name suffixes of the languages that could be selected. */
@@ -109,7 +151,8 @@ class HttpBundleSource {
         return suffixes;
     }
 
-    private void fetchMessageBundles(String jrxmlText, URI jrxmlUri, Set<String> suffixes, Map<String, byte[]> files) {
+    private void collectMessageBundles(String jrxmlText, URI jrxmlUri, Set<String> suffixes, Map<String, byte[]> files,
+                                       Map<String, URI> candidates) {
         Matcher declared = RESOURCE_BUNDLE.matcher(jrxmlText);
         if (!declared.find()) {
             return;
@@ -119,16 +162,12 @@ class HttpBundleSource {
             return;
         }
         String base = declared.group(1);
-        List<String> candidates = new ArrayList<>();
-        candidates.add(base + ".properties");
-        suffixes.forEach(suffix -> candidates.add(base + "_" + suffix + ".properties"));
-        for (String candidate : candidates) {
-            if (files.containsKey(candidate)) {
-                continue;
-            }
-            byte[] content = downloadOptional(checkedUri(jrxmlUri.resolve(candidate).toString()));
-            if (content != null) {
-                files.put(candidate, content);
+        List<String> names = new ArrayList<>();
+        names.add(base + ".properties");
+        suffixes.forEach(suffix -> names.add(base + "_" + suffix + ".properties"));
+        for (String name : names) {
+            if (!files.containsKey(name) && !candidates.containsKey(name)) {
+                candidates.put(name, checkedUri(jrxmlUri.resolve(name).toString()));
             }
         }
     }
@@ -191,7 +230,8 @@ class HttpBundleSource {
             throw new ApiException(HttpStatus.NOT_FOUND, "REPORT_NOT_FOUND", what + " not found at " + uri.getHost() + uri.getRawPath());
         }
         if (response.status() != 200) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", what + " host answered HTTP " + response.status());
+            ApiException failure = new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", what + " host answered HTTP " + response.status());
+            throw response.status() >= 500 ? failure.transientFailure() : failure;
         }
         return response.body();
     }
@@ -204,13 +244,20 @@ class HttpBundleSource {
             return null;
         }
         if (status != 200) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "host answered HTTP " + status + " for " + uri.getRawPath());
+            ApiException failure = new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "host answered HTTP " + status + " for " + uri.getRawPath());
+            throw status >= 500 ? failure.transientFailure() : failure;
         }
         return response.body();
     }
 
     private Fetched get(URI uri) {
         HttpRequest request = HttpRequest.newBuilder(uri).timeout(settings.timeout()).GET().build();
+        try {
+            slots.acquire(); // bounds the downloads in flight across all requests
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "interrupted while waiting to download a report", e);
+        }
         try {
             HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream body = response.body()) {
@@ -221,11 +268,17 @@ class HttpBundleSource {
                 return new Fetched(response.statusCode(), bytes);
             }
         } catch (IOException e) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "cannot download " + uri.getHost() + uri.getRawPath() + ": " + e.getMessage(), e);
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "cannot download " + uri.getHost() + uri.getRawPath() + ": " + e.getMessage(), e).transientFailure();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "interrupted while downloading a report", e);
+        } finally {
+            slots.release();
         }
+    }
+
+    void close() {
+        executor.shutdownNow();
     }
 
     private record Fetched(int status, byte[] body) {

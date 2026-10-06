@@ -129,9 +129,10 @@ class S3BundleSource implements BundleSource {
             if (e.statusCode() == 404) {
                 throw new ApiException(HttpStatus.NOT_FOUND, "REPORT_NOT_FOUND", "bucket or report not found: s3://" + bucket + "/" + key, e);
             }
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "S3 error: " + e.awsErrorDetails().errorMessage(), e);
+            ApiException failure = new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "S3 error: " + e.awsErrorDetails().errorMessage(), e);
+            throw e.statusCode() >= 500 ? failure.transientFailure() : failure;
         } catch (software.amazon.awssdk.core.exception.SdkException e) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "cannot reach S3 storage: " + e.getMessage(), e);
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "STORAGE_ERROR", "cannot reach S3 storage: " + e.getMessage(), e).transientFailure();
         } catch (IOException e) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "cannot store bundle: " + e.getMessage(), e);
         }

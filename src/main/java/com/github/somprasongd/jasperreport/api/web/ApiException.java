@@ -8,6 +8,7 @@ public class ApiException extends RuntimeException {
     private final HttpStatus status;
     private final String code;
     private Integer retryAfterSeconds;
+    private boolean transientFailure;
 
     public ApiException(HttpStatus status, String code, String message) {
         super(message);
@@ -19,6 +20,20 @@ public class ApiException extends RuntimeException {
         super(message, cause);
         this.status = status;
         this.code = code;
+    }
+
+    /**
+     * Marks a failure of the infrastructure behind a request (connection refused, timeout, HTTP 5xx) as opposed to
+     * an answer about the request itself (not found, forbidden, expired URL). Only the former may be papered over
+     * with a stale copy.
+     */
+    public ApiException transientFailure() {
+        this.transientFailure = true;
+        return this;
+    }
+
+    public boolean isTransientFailure() {
+        return transientFailure;
     }
 
     public ApiException retryAfter(int seconds) {
