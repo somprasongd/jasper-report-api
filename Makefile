@@ -7,7 +7,7 @@ endif
 MVN ?= ./mvnw
 
 .DEFAULT_GOAL := help
-.PHONY: help build test run docker-build up down dev-up dev-down seed api-key test-presigned
+.PHONY: help build test run docker-build up down dev-up dev-down seed api-key test-presigned release
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -44,3 +44,6 @@ api-key: ## Generate an API key: make api-key CLIENT=hosos-web [INDEX=0]
 
 test-presigned: ## Presign a rustfs report URL and render it through the running demo (needs make dev-up)
 	scripts/test-presigned.sh
+
+release: ## Cut a release: make release VERSION=0.2.0 [NEXT=0.3.0] (tests, pom, CHANGELOG, tag, push -> CI publishes)
+	@scripts/release.sh "$(VERSION)" $(NEXT)
