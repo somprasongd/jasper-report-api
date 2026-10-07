@@ -577,11 +577,28 @@ API_KEY=$KEY scripts/jrxml-upgrade.sh medical_certificate.jrxml
 - ไฟล์ที่เป็นรูปแบบ 7 อยู่แล้วถูกส่งคืนตามเดิม (`alreadyCurrent: true`)
 - นิพจน์ (`CDATA`), `uuid` และ comment คงเดิมทุกตัวอักษร; แปลงชื่อ/ค่าของ attribute ที่เปลี่ยนใน 7 ให้ เช่น `isBold` → `bold`, `isStretchWithOverflow="true"` → `textAdjust="StretchHeight"`, ขอบแบบเก่า → pen, ทิศทาง barcode `0/90/180/270` → `up/left/down/right`
 - **ส่วนที่แปลงให้ไม่ได้จะไม่ถูกทิ้งเงียบๆ** — อยู่ใน `warnings` พร้อมตำแหน่ง (เช่น `title/band/pieChart[1]: ...`) และ element นั้นถูกแทนด้วย `<!-- not converted: ... -->` ในผลลัพธ์ ได้แก่ chart (API นี้ไม่มี `jasperreports-charts`), `map`, `sort`, `spiderChart`, `iconLabel`, report part, barbecue (แปลงเป็น `kind="barbecue"` แต่ต้องเพิ่ม jar ของ barbecue เอง), query language ที่ JR 7 โหลดไม่ได้ (เช่น `plsql`)
+- **property ที่ JR 7 เลิกอ่าน:** `<property name="net.sf.jasperreports....">` ที่ JR 6.21.5 รู้จักแต่ JR 7.0.8 ไม่มีแล้ว (เช่น `components.map.*`, `export.swf.ignore.size`, `query.executer.factory.plsql`) จะถูกเก็บไว้ในผลลัพธ์แต่มี warning ว่าไม่มีผล รายการนี้ได้จากการเทียบ jar สองเวอร์ชัน (ไม่มี property ไหนเปลี่ยนชื่อ มีแต่เลิกไปพร้อมฟีเจอร์) property ที่ไม่อยู่ในรายการอาจยังถูกเมินใน 7 ก็ได้ — เป็นหลักฐาน ไม่ใช่การรับประกัน
 - คลาสของ JasperReports ที่ย้ายที่หรือไม่มีใน 7 และถูกอ้างใน expression/import (เช่น `net.sf.jasperreports.engine.data.JsonDataSource` → `net.sf.jasperreports.json.data.JsonDataSource`) จะถูก **เตือนแต่ไม่ถูกแก้ให้** เพราะ expression คือโค้ดของคุณ
-- **ขนาดตัวอักษรใน `<reportFont>`:** JR 6.17–6.21 ไม่อ่านค่า `size` ของ `reportFont` ข้อความเหล่านั้นจึงออกเป็น 10pt จริงๆ ตัวแปลงแปลง `reportFont` เป็น style และทิ้ง size เพื่อให้ผลตรงกับที่เคยเห็นใน 6.x แล้วเตือนไว้ ถ้าต้องการขนาดที่ประกาศไว้ ให้ตั้งใน style เอง
+- **ขนาดตัวอักษรใน `<reportFont>`:** JR 6.17–6.21 ไม่อ่านค่า `size` ของ `reportFont` ข้อความที่ใช้ฟอนต์นั้นจึงเคยออกเป็นขนาดเริ่มต้น (10pt) ตัวแปลงแปลง `reportFont` เป็น style และ**ใช้ขนาดที่ประกาศไว้** (`fontSize`) ตามที่ผู้ออกแบบตั้งใจและตามที่ Jaspersoft Studio 7 แสดง พร้อม warning ต่อ reportFont ที่มี `size` เพราะหน้าตาจะต่างจากที่เคยพิมพ์ใน 6.x ถ้าอยากได้หน้าตาเดิม ให้ลบ `fontSize` ออกจาก style นั้น
 - ถ้าผลลัพธ์ยังโหลดใน JasperReports 7 ไม่ได้ จะมี warning บอกท้ายรายการ
 - ความปลอดภัย: ปฏิเสธ DOCTYPE/entity ภายนอก (กัน XXE) และ XML ที่ซ้อนลึกเกิน 200 ชั้น; ขนาดจำกัดด้วย `report.sources.max-bytes`; ข้อความ error ไม่สะท้อนเนื้อไฟล์
 - หลังแปลงควรเปิดผลใน Studio 7 หรือยิง [`/validate`](#post-apiv1reportsvalidate) แล้ว render เทียบกับของเดิมก่อนใช้งานจริง และ **ห้ามนำผลไป compile ด้วย JR 6**
+
+#### ตรวจทั้งโฟลเดอร์ก่อนใช้งานจริง
+
+`scripts/jrxml-migrate-check.sh` ทำขั้นตอนที่ควรทำกับรายงานจริงให้ต่อเนื่อง ยิงกับ API ที่รันอยู่: แปลงทุกไฟล์ → เขียนผลลง `<reports-dir>/migrated/` → `/validate` ทุกไฟล์ → render แล้วเทียบกับ PDF ของระบบเดิม
+
+```bash
+API_KEY=$KEY scripts/jrxml-migrate-check.sh ./old-reports ./reports ./reference-pdfs
+```
+
+- `./old-reports` มี JRXML 6.x (รวม subreport) และไฟล์อื่นที่รายงานใช้ (รูป, `.properties`) ซึ่งถูกคัดลอกตามไปด้วย; `./reports` คือโฟลเดอร์ที่ API อ่าน (`report.sources.local.root`)
+- อยากให้ render ด้วย ให้วาง `<ชื่อรายงาน>.request.json` ไว้ข้างไฟล์ต้นฉบับ เป็น request ส่วนที่เหลือ เช่น `{"datasource":"opd","parameters":[{"name":"hn","value":"HN001"}]}` (ไม่มี = ตรวจแค่แปลง + validate)
+- อยากเทียบกับของเดิม ให้เก็บ PDF ที่ระบบเก่า render ไว้ที่ `./reference-pdfs/<ชื่อรายงาน>.pdf` ด้วยข้อมูลและ parameter ชุดเดียวกัน (เช่นยิง `jasperreports-pdf` ตัวเดิมด้วย request เดียวกัน) สคริปต์เทียบ **จำนวนหน้า, ข้อความ, และภาพของแต่ละหน้า** (ต้องมี `pdftotext`/`pdfinfo` ของ poppler; ภาพต้องมี `pdftoppm` กับ ImageMagick) PDF ใหม่และภาพส่วนต่างอยู่ใน `./migrate-check-out/`
+- ผลแต่ละรายงาน: `OK`, `CHECK` (มี warning ที่คนต้องอ่าน), `FAIL` (แปลง/validate/render ไม่ผ่าน หรือหน้า/ข้อความต่าง) exit code ไม่ใช่ 0 ถ้ามี `FAIL` ตั้งความคลาดเคลื่อนของภาพ (เปอร์เซ็นต์พิกเซลที่ต่างได้ต่อหน้า ค่าเริ่มต้น 1) ด้วย `PIXEL_TOLERANCE`
+- ข้อควรระวัง: ข้อความภาษาไทยที่ใช้ฟอนต์ซึ่งไม่มีอักษรไทยจะไม่ถูกดึงออกมาเทียบ ใช้ภาพของหน้าช่วยตัดสิน
+
+**เปิดใน Jaspersoft Studio 7:** สคริปต์ทำแทนไม่ได้ ให้เปิดไฟล์ใน `migrated/` ด้วย Studio 7 แล้วดูว่าเปิดได้ไม่มี error, Preview ตรงกับ PDF ที่ API ออกให้ และตรวจรายการที่ warning บอก
 
 ### ฟอนต์ไทย
 

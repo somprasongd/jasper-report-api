@@ -208,6 +208,29 @@ class LegacyJrxmlConverterTest {
         assertThat(r.warnings()).hasSize(2).allSatisfy(w -> assertThat(w).startsWith("reportFont[").contains("JR 6", "now prints at"));
     }
 
+    @Test
+    void propertiesJr7NoLongerReadsAreKeptAndReportedOthersAreNot() {
+        String jrxml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" name="p" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
+                	<property name="net.sf.jasperreports.export.swf.ignore.size" value="true"/>
+                	<property name="net.sf.jasperreports.components.map.key" value="k"/>
+                	<property name="net.sf.jasperreports.query.executer.factory.plsql" value="x"/>
+                	<property name="net.sf.jasperreports.export.pdf.encrypted" value="true"/>
+                	<property name="ireport.zoom" value="1.0"/>
+                	<property name="report.datasource" value="opd"/>
+                	<title><band height="20"/></title>
+                </jasperReport>""";
+        Result r = new LegacyJrxmlConverter().convert(jrxml);
+
+        assertThat(r.warnings()).hasSize(3)
+                .anySatisfy(w -> assertThat(w).startsWith("property[net.sf.jasperreports.export.swf.ignore.size]: ").contains("no effect"))
+                .anySatisfy(w -> assertThat(w).contains("components.map.key", "map component"))
+                .anySatisfy(w -> assertThat(w).contains("query.executer.factory.plsql", "no query executer"));
+        // nothing is dropped: all six properties are still in the result
+        assertThat(Jrxml6Fixtures.count(Jrxml6Fixtures.dom(r.jrxml()), "/jasperReport/property")).isEqualTo(6);
+    }
+
     // ---------------------------------------------------------------- components and subreports
 
     @Test

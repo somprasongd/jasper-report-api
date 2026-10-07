@@ -14,11 +14,14 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 - `format: "xlsx"` and `format: "csv"` in render requests (they used to answer 400 `FORMAT_UNSUPPORTED`). Spreadsheets and CSV are sent as attachments; CSV is UTF-8 with a byte order mark so Excel reads Thai (`report.export.csv-bom: false` turns it off). Any other `format` is still refused. `.xls`, `docx` and `html` are not supported.
 - Swap-file virtualizer for every render: only `report.virtualizer.max-pages-in-memory` (default 100) pages of a report stay on the heap while it is filled, the rest go to a temporary file under `report.cache.work-dir/swap` that is deleted when the render ends. `report.virtualizer.enabled: false` turns it off; if the swap file cannot be created the render goes on without it.
 - OpenAPI 3.1 contract at `GET /api/v1/openapi.yaml` (no API key needed), written by hand in `src/main/resources/openapi/openapi.yaml` and checked against the code by `OpenApiContractTest` (routes, request fields, formats, error codes).
-- `POST /api/v1/reports/convert` converts a JasperReports 6.x JRXML (including the DOCTYPE-era syntax) to the JR 7 syntax so reports can be migrated without opening each one in Jaspersoft Studio 7; `scripts/jrxml-upgrade.sh` calls it for a file. Constructs without a faithful JR 7 equivalent (charts, maps, barbecue, moved JasperReports classes, `reportFont` sizes, ...) are listed in `warnings` with their location instead of being dropped. New error codes `CONVERT_FAILED` and `JRXML_TOO_LARGE`.
+- `POST /api/v1/reports/convert` converts a JasperReports 6.x JRXML (including the DOCTYPE-era syntax) to the JR 7 syntax so reports can be migrated without opening each one in Jaspersoft Studio 7; `scripts/jrxml-upgrade.sh` calls it for a file and `scripts/jrxml-migrate-check.sh` converts, validates and renders a whole folder and compares the PDFs with the old system's (page count, text, page images). Constructs without a faithful JR 7 equivalent (charts, maps, barbecue, moved JasperReports classes, `reportFont` sizes, ...) are listed in `warnings` with their location instead of being dropped. `reportFont` sizes are kept in the converted style (JR 6 ignored them and printed 10pt; each one is warned about), and properties JR 6.21.5 knows but JR 7.0.8 does not (map component, SWF exporter, query executers of dropped languages, ...) are kept with a warning. New error codes `CONVERT_FAILED` and `JRXML_TOO_LARGE`.
 - Tests: sub-reports fed from a nested array of the request `data` (`JsonDataSource.subDataSource`).
 
 ### Changed
 - `SOURCE_NOT_ALLOWED` for a host outside the allowlist names the host with its port (`host 'files.internal:443' ...`).
+
+### Fixed
+- A report that JR 7 refuses to load with an unchecked exception (for example a `plsql` query, which has no executer in JR 7) is answered with 422 `REPORT_COMPILE_FAILED` instead of 500 `INTERNAL_ERROR`.
 
 ## [0.2.0] - 2026-10-06
 

@@ -111,6 +111,16 @@ class DataModesTest {
     }
 
     @Test
+    void aReportThatJr7RefusesToLoadIsACompileFailureNotAServerError() throws Exception {
+        // JR 7 throws an unchecked exception for a query language it has no executer for ("plsql" in old reports)
+        mvc.perform(render("modes/plsql_query.jrxml", ""))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("REPORT_COMPILE_FAILED"));
+        mvc.perform(post("/v1/reports/validate").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mainReport\":{\"url\":\"modes/plsql_query.jrxml\"}}"))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("REPORT_COMPILE_FAILED"));
+    }
+
+    @Test
     void validateDescribesTheChosenSource() throws Exception {
         mvc.perform(post("/v1/reports/validate").header("X-API-Key", RenderApiTest.KEY).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mainReport\":{\"url\":\"modes/json_demo.jrxml\"},\"data\":" + PEOPLE + "}"))

@@ -96,6 +96,10 @@ public class ReportCompiler {
         } catch (JRException e) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "REPORT_COMPILE_FAILED",
                     "cannot compile " + file.getFileName() + ": " + rootMessage(e) + formatHint(file, e), e);
+        } catch (RuntimeException e) {
+            // the JR 7 loader throws unchecked exceptions for content it refuses, such as a query language it has no executer for
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "REPORT_COMPILE_FAILED",
+                    "cannot load " + file.getFileName() + ": " + rootMessage(e), e);
         } catch (IOException e) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "cannot read " + file + ": " + e.getMessage(), e);
         }

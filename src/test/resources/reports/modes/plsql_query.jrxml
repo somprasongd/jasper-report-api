@@ -1,0 +1,4 @@
+<jasperReport name="plsql_query" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="be4f5a64-0b1e-4c5e-9d11-6a0d2d3d0301">
+	<query language="plsql"><![CDATA[select 1 from dual]]></query>
+	<title height="30"/>
+</jasperReport>
