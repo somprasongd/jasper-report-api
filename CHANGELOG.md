@@ -7,6 +7,8 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-07
+
 ### Added
 - `report.sources.http.allowed-hosts` (`HTTP_ALLOWED_HOSTS`) accepts `host:port` (only that port; a URL without a port means 80/443) and `*.domain` wildcards (every sub-domain at any depth, not the domain itself), for example `*.reports.svc.cluster.local`. A plain `host` still allows every port. A malformed entry now stops the API at startup.
 - CI workflow: tests and a Docker image build on every push to `main` and every pull request.
@@ -55,6 +57,7 @@ First release.
 - Docker image and a one-command demo (`make dev-up`) with PostgreSQL sample data and rustfs.
 - Release workflow: a `v*` tag builds the jar, publishes the image to GHCR and creates a GitHub Release.
 
-[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/somprasongd/jasper-report-api/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/somprasongd/jasper-report-api/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/somprasongd/jasper-report-api/releases/tag/v0.1.0
