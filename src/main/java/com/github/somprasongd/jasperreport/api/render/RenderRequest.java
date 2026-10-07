@@ -21,6 +21,8 @@ public record RenderRequest(
         List<@Valid ParamInput> parameters,
         String format,
         String fileName,
+        /** {@code inline} (shown in the browser) or {@code attachment} (downloaded). Blank = the default of the format. */
+        String disposition,
         /** Language tag (th, en, th-TH, ...). Wins over the report's own default. */
         String locale,
         /** JSON the report's {@code <query language="json">} reads instead of a database. Excludes {@code datasource}. */

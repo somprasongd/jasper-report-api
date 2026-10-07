@@ -112,4 +112,24 @@ class ExportFormatsTest {
         assertThat(response.getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("inline").contains("json_demo.pdf");
         assertThat(response.getContentAsByteArray()).startsWith("%PDF".getBytes(StandardCharsets.US_ASCII));
     }
+
+    @Test
+    void dispositionOverridesTheDefaultOfTheFormat() throws Exception {
+        MockHttpServletResponse download = people(",\"disposition\":\"attachment\"");
+        assertThat(download.getContentType()).isEqualTo("application/pdf");
+        assertThat(download.getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("attachment").contains("json_demo.pdf");
+
+        MockHttpServletResponse show = people(",\"format\":\"csv\",\"disposition\":\"INLINE\"");
+        assertThat(show.getContentType()).startsWith("text/csv");
+        assertThat(show.getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("inline").contains("json_demo.csv");
+
+        assertThat(people(",\"disposition\":\"\"").getHeader(HttpHeaders.CONTENT_DISPOSITION)).startsWith("inline");
+    }
+
+    @Test
+    void unknownDispositionIsRefused() throws Exception {
+        mvc.perform(render("modes/json_demo.jrxml", ",\"data\":" + PEOPLE + ",\"disposition\":\"download\""))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("DISPOSITION_INVALID"));
+    }
 }

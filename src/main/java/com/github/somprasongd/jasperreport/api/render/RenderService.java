@@ -91,6 +91,7 @@ public class RenderService {
 
     public RenderResult render(RenderRequest request, String tenantHeader) {
         OutputFormat format = OutputFormat.parse(request.format());
+        boolean inline = Disposition.inline(request.disposition(), format);
         String tenant = datasources.requestedTenant(tenantHeader != null && !tenantHeader.isBlank() ? tenantHeader : request.tenant());
         String reportName = "unknown";
         String datasourceName = "unknown";
@@ -118,7 +119,7 @@ public class RenderService {
             byte[] content = export(print, format);
             outcome = "success";
             return new RenderResult(content, format.contentType(), fileName(request, reportName, format), bundle.version(),
-                    locale.toLanguageTag(), format.inline());
+                    locale.toLanguageTag(), inline);
         } catch (ApiException e) {
             outcome = e.code();
             throw e;

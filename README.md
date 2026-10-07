@@ -114,13 +114,14 @@ Base path คือ `/api`
 | `parameters[].type` | ไม่ | ใช้เฉพาะเมื่อ JRXML ประกาศชนิดกว้างๆ (`Object`, `Collection`) |
 | `format` | ไม่ | `pdf` (ค่าเริ่มต้น), `xlsx` หรือ `csv` (ไม่สนตัวพิมพ์เล็ก/ใหญ่) ดู [รูปแบบไฟล์ผลลัพธ์](#รูปแบบไฟล์ผลลัพธ์-pdf--xlsx--csv) |
 | `fileName` | ไม่ | ชื่อไฟล์ใน `Content-Disposition` (ภาษาไทยได้) ถ้ายังไม่มีนามสกุลของ `format` จะต่อให้ |
+| `disposition` | ไม่ | `inline` (ให้เบราว์เซอร์เปิดดู) หรือ `attachment` (ให้ดาวน์โหลด) ไม่สนตัวพิมพ์เล็ก/ใหญ่ ไม่ส่ง = ตาม `format` (pdf → `inline`, `xlsx`/`csv` → `attachment`) กระทบแค่ `Content-Disposition` ส่วน `Content-Type` ยังเป็นของ `format` |
 | `locale` | ไม่ | ภาษาของรายงาน เช่น `th`, `en`, `en-US` — **ชนะค่าที่รายงานกำหนดไว้เอง** ดู [หลายภาษา](#หลายภาษา-i18n) |
 
 Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (ไม่บังคับ), `X-Request-Id` (ไม่บังคับ; ไม่ส่งจะสร้างให้ และส่งกลับ + อยู่ใน log ทุกบรรทัดของ request)
 
 ### Response
 
-- สำเร็จ `200`, `Content-Type` ตาม `format` (`application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` หรือ `text/csv; charset=UTF-8`), `Content-Disposition: inline; filename*=UTF-8''...` (PDF เปิดในเบราว์เซอร์; `xlsx`/`csv` เป็น `attachment`), `X-Report-Version` (เวอร์ชันของโฟลเดอร์รายงานที่ใช้จริง), `Content-Language` (ภาษาที่ใช้จริง เช่น `th`), `X-Request-Id`
+- สำเร็จ `200`, `Content-Type` ตาม `format` (`application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` หรือ `text/csv; charset=UTF-8`), `Content-Disposition: inline; filename*=UTF-8''...` (ค่าเริ่มต้น: PDF เปิดในเบราว์เซอร์; `xlsx`/`csv` เป็น `attachment`; เปลี่ยนได้ด้วย `disposition` ใน request), `X-Report-Version` (เวอร์ชันของโฟลเดอร์รายงานที่ใช้จริง), `Content-Language` (ภาษาที่ใช้จริง เช่น `th`), `X-Request-Id`
 - ผิดพลาด `application/problem+json`:
 
 ```json
@@ -142,6 +143,7 @@ Header: `X-API-Key` (ตามโหมด [API key](#api-key)), `X-Tenant-Id` (
 | `SOURCE_NOT_ALLOWED` | 400 | path/bucket/host/scheme ไม่ได้รับอนุญาต หรือพยายามออกนอกโฟลเดอร์ |
 | `PARAMETER_INVALID` | 400 | แปลงค่า parameter ไม่ได้ (ระบุชื่อ parameter) |
 | `FORMAT_UNSUPPORTED` | 400 | `format` ที่ไม่ใช่ `pdf`, `xlsx`, `csv` |
+| `DISPOSITION_INVALID` | 400 | `disposition` ที่ไม่ใช่ `inline`, `attachment` |
 | `LOCALE_INVALID` | 400 (ใน request) / 422 (ใน JRXML) | `locale` ไม่ใช่ language tag เช่น `th`, `en-US` |
 | `REPORT_NOT_FOUND` | 404 | หาไฟล์/bucket ไม่เจอ |
 | `REPORT_COMPILE_FAILED` | 422 | JRXML compile ไม่ผ่าน (รวมถึงเป็นรูปแบบ 6.x) |

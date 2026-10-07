@@ -7,6 +7,9 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+### Added
+- `disposition` in render requests (`inline` or `attachment`, case-insensitive) chooses whether `Content-Disposition` asks the browser to show or to download the document. Without it nothing changes: pdf is `inline`, xlsx and csv are `attachment`. `Content-Type` still follows `format`. Any other value answers 400 `DISPOSITION_INVALID`.
+
 ## [0.3.0] - 2026-10-07
 
 ### Added

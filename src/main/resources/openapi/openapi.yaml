@@ -37,6 +37,7 @@ paths:
         returns the document in the requested `format`.
 
         Without `format` the answer is a PDF, shown inline by browsers; `xlsx` and `csv` are sent as attachments.
+        `disposition` overrides that per request (`inline` to show, `attachment` to download).
       parameters:
         - $ref: '#/components/parameters/TenantId'
         - $ref: '#/components/parameters/RequestId'
@@ -270,7 +271,7 @@ components:
       description: The rendered document
       headers:
         Content-Disposition:
-          description: '`inline` for pdf, `attachment` for xlsx and csv; `filename*` is UTF-8 encoded.'
+          description: 'The `disposition` of the request; without it `inline` for pdf and `attachment` for xlsx and csv. `filename*` is UTF-8 encoded.'
           schema: {type: string}
         X-Report-Version:
           description: Fingerprint of the report folder that was used; changes whenever any file in it changes.
@@ -334,6 +335,12 @@ components:
         fileName:
           type: string
           description: Name in `Content-Disposition` (Thai allowed). Default is `mainReport.name`, then the JRXML name. The extension of the format is added when missing.
+        disposition:
+          type: string
+          enum: [inline, attachment]
+          description: |
+            `inline` asks the browser to show the document, `attachment` to download it. Case-insensitive. Without it
+            pdf is `inline` and xlsx and csv are `attachment`. Only sets `Content-Disposition`; `Content-Type` stays that of the format.
         locale:
           type: string
           description: Language tag (`th`, `en`, `en-US`). Wins over the language the report declares itself.
@@ -483,6 +490,7 @@ components:
         - SOURCE_NOT_ALLOWED
         - PARAMETER_INVALID
         - FORMAT_UNSUPPORTED
+        - DISPOSITION_INVALID
         - LOCALE_INVALID
         - REPORT_NOT_FOUND
         - REPORT_COMPILE_FAILED

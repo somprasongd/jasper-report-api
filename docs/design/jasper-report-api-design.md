@@ -658,7 +658,7 @@ phase 1 ทำ http(s) แบบ "ไฟล์เดียว" ซึ่ง **�
 | ตั้งค่า xlsx | ชีตเดียวต่อเนื่อง (`onePagePerSheet=false`), ตรวจชนิดเซลล์, พื้นหลังหน้าไม่ขาว, ตัดแถว/คอลัมน์ว่างระหว่างกัน | ผลที่คนเอาไปเปิดใน Excel ต้องการ ไม่ใช่สำเนาของหน้ากระดาษ |
 | ไม่บังคับ `ignorePagination` | ปล่อยให้ผู้เขียนรายงานตั้งใน JRXML | JasperReports แยกไม่ได้ว่า `false` ตั้งเองหรือค่าเริ่มต้น และการบังคับจะเปลี่ยนผลของ `max-pages` โดยไม่บอก |
 | csv | UTF-8 + BOM (`report.export.csv-bom`, ค่าเริ่มต้น `true`), `,` และ `CRLF` | Excel บน Windows อ่าน UTF-8 ไม่มี BOM เป็นภาษาท้องถิ่น ภาษาไทยจะเพี้ยน; โปรแกรมอื่นข้าม BOM ได้ |
-| `Content-Disposition` | pdf `inline`, xlsx/csv `attachment`; เติมนามสกุลของ format ให้ถ้า `fileName` ยังไม่มี | เบราว์เซอร์เปิด pdf ได้เอง แต่ไม่ควรพยายามเปิด xlsx |
+| `Content-Disposition` | ค่าเริ่มต้น pdf `inline`, xlsx/csv `attachment` (override ได้ด้วย `disposition` ใน request); เติมนามสกุลของ format ให้ถ้า `fileName` ยังไม่มี | เบราว์เซอร์เปิด pdf ได้เอง แต่ไม่ควรพยายามเปิด xlsx |
 
 ทดสอบ: `ExportFormatsTest` (เปิดไฟล์ xlsx เป็น zip ตรวจข้อความไทย, รูป/QR ฝังเป็น `xl/media/`, BOM, ชื่อไฟล์) และ `CsvWithoutBomTest`
 
