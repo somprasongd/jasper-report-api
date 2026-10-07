@@ -1,5 +1,6 @@
 package com.github.somprasongd.jasperreport.api;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -24,8 +26,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class LimitsTest {
 
+    private static final AtomicBoolean WARMED_UP = new AtomicBoolean();
+
     @Autowired
     MockMvc mvc;
+
+    /**
+     * The fill timeout is only 700ms, so the first render of the class must not pay for the cold start (Groovy, fonts,
+     * the swap file); on a slow CI runner that alone used to turn the page-limit test into a 504. The outcome of this
+     * render does not matter.
+     */
+    @BeforeEach
+    void warmUp() throws Exception {
+        if (WARMED_UP.compareAndSet(false, true)) {
+            mvc.perform(render("limits/many_rows.jrxml"));
+        }
+    }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder render(String url) {
         return post("/v1/reports/render").header("X-API-Key", RenderApiTest.KEY)
