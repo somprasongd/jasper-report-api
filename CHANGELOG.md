@@ -7,6 +7,8 @@ Add entries under `## [Unreleased]` as you work; `make release` moves them into 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-07
+
 ### Added
 - `disposition` in render requests (`inline` or `attachment`, case-insensitive) chooses whether `Content-Disposition` asks the browser to show or to download the document. Without it nothing changes: pdf is `inline`, xlsx and csv are `attachment`. `Content-Type` still follows `format`. Any other value answers 400 `DISPOSITION_INVALID`.
 
@@ -60,7 +62,8 @@ First release.
 - Docker image and a one-command demo (`make dev-up`) with PostgreSQL sample data and rustfs.
 - Release workflow: a `v*` tag builds the jar, publishes the image to GHCR and creates a GitHub Release.
 
-[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/somprasongd/jasper-report-api/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/somprasongd/jasper-report-api/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/somprasongd/jasper-report-api/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/somprasongd/jasper-report-api/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/somprasongd/jasper-report-api/releases/tag/v0.1.0
