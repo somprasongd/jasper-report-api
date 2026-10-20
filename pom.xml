@@ -23,7 +23,7 @@
 
 	<properties>
 		<java.version>21</java.version>
-		<jasperreports.version>7.0.8</jasperreports.version>
+		<jasperreports.version>7.1.0</jasperreports.version>
 		<awssdk.version>2.55.11</awssdk.version>
 	</properties>
 
